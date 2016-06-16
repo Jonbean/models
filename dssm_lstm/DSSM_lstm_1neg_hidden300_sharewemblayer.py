@@ -10,7 +10,7 @@ import collections
 import LSTM_Encoder
 import MLP_Encoder
 
-class DSSM_BLSTM_Model(object):
+class DSSM_LSTM_Model(object):
     def __init__(self):
         # Initialize Theano Symbolic variable attributes
         self.story_input_variable = None
@@ -288,7 +288,7 @@ class DSSM_BLSTM_Model(object):
         best_val_accuracy = 0
         best_test_accuracy = 0
         test_threshold = 2000.0
-        prev_percetage = 0.0
+        prev_percentage = 0.0
         speed = 0.0
         batch_count = 0.0
 
@@ -327,9 +327,9 @@ class DSSM_BLSTM_Model(object):
                     speed = N_BATCH * 10.0 / (time.time() - start_time)
                     start_time = time.time()
 
-                percetage = (batch_count % test_threshold) / test_threshold * 100
-                if percetage - prev_percetage >= 1:
-                    utils.progress_bar(percetage, speed)
+                percentage = ((batch_count % test_threshold)+1) / test_threshold * 100
+                if percentage - prev_percentage >= 1:
+                    utils.progress_bar(percentage, speed)
 
                 # peek on val set every 5000 instances(1000 batches)
                 if batch_count % test_threshold == 0:
@@ -364,7 +364,7 @@ class DSSM_BLSTM_Model(object):
         print "accuracy is: ", test_result * 100, "%"
 
 def main():
-    model = DSSM_BLSTM_Model()
+    model = DSSM_LSTM_Model()
 
     print "loading data"
     model.load_data()
