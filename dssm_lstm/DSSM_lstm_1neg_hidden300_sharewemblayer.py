@@ -7,7 +7,7 @@ import time
 import utils
 import cPickle as pickle
 import collections
-import BLSTM_Encoder
+import LSTM_Encoder
 import MLP_Encoder
 
 class DSSM_BLSTM_Model(object):
@@ -40,8 +40,8 @@ class DSSM_BLSTM_Model(object):
         self.train_set_path = '../../data/pickles/train_index_corpus.pkl'
         self.val_set_path = '../../data/pickles/val_index_corpus.pkl'
         self.test_set_path = '../../data/pickles/test_index_corpus.pkl' 
-        self.best_val_model_save_path = './best_models_params/BLSTM_neg1_300_sharewemb_best_val_model_params.pkl'
-        self.best_test_model_save_path = './best_models_params/BLSTM_neg1_300_sharewemb_best_test_model_params.pkl'
+        self.best_val_model_save_path = './best_models_params/LSTM_neg1_300_sharewemb_best_val_model_params.pkl'
+        self.best_test_model_save_path = './best_models_params/LSTM_neg1_300_sharewemb_best_test_model_params.pkl'
         self.wemb_matrix_path = '../../data/pickles/index_wemb_matrix.pkl'
 
         self.train_story = None
@@ -96,7 +96,7 @@ class DSSM_BLSTM_Model(object):
         neg_ending1_reshape_input = self.neg_ending1_input_variable.reshape([neg_ending1_batchsize, neg_ending1_seqlen,1])
 
 
-        self.wemb_layer = BLSTM_Encoder.BlstmEncoder(300)
+        self.wemb_layer = LSTM_Encoder.LstmEncoder(300)
 
         self.wemb_layer.build_model(self.wemb)
 
@@ -142,11 +142,6 @@ class DSSM_BLSTM_Model(object):
 
         all_updates = wemb_updates.items() + story_reason_updates.items() + end_reason_updates.items()
         
-        # for k,v in doc_updates.items() + query_updates.items():
-        #     if k in all_params:
-        #         continue
-        #     else:
-        #         all_params[k] = v
 
         self.train_func = theano.function([self.story_input_variable, self.story_mask, 
                                      self.ending_input_variable, self.ending_mask,
@@ -305,6 +300,7 @@ class DSSM_BLSTM_Model(object):
 
             start_time = time.time()
 
+            
             for batch in range(max_batch):
                 batch_index_list = [shuffled_index_list[i] for i in range(batch * N_BATCH, (batch+1) * N_BATCH)]
                 train_story = [self.train_story[index] for index in batch_index_list]
@@ -331,7 +327,7 @@ class DSSM_BLSTM_Model(object):
                     speed = N_BATCH * 10.0 / (time.time() - start_time)
                     start_time = time.time()
 
-                percetage = ((batch_count % test_threshold)+1) / test_threshold * 100
+                percetage = (batch_count % test_threshold) / test_threshold * 100
                 if percetage - prev_percetage >= 1:
                     utils.progress_bar(percetage, speed)
 
@@ -348,7 +344,7 @@ class DSSM_BLSTM_Model(object):
                         print "new best! test on test set..."
                         best_val_accuracy = val_result
                         self.saving_model('val', best_val_accuracy)
-                        pickle.dump(val_result_list, open('./prediction/BLSTM_1neg_sharewemb_best_val_prediction.pkl','wb'))
+                        pickle.dump(val_result_list, open('./prediction/LSTM_1neg_sharewemb_best_val_prediction.pkl','wb'))
 
                         test_accuracy, test_result_list = self.test_set_test()
                         print "test set accuracy: ", test_accuracy * 100, "%"

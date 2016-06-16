@@ -39,8 +39,8 @@ class DSSM_BLSTM_Model(object):
         self.train_set_path = '../../data/pickles/train_index_corpus.pkl'
         self.val_set_path = '../../data/pickles/val_index_corpus.pkl'
         self.test_set_path = '../../data/pickles/test_index_corpus.pkl' 
-        self.best_val_model_save_path = './BLSTM_neg1_300_best_val_model_params.pkl'
-        self.best_test_model_save_path = './BLSTM_neg1_300_best_test_model_params.pkl'
+        self.best_val_model_save_path = './best_models_params/BLSTM_neg1_300_best_val_model_params.pkl'
+        self.best_test_model_save_path = './best_models_params/BLSTM_neg1_300_best_test_model_params.pkl'
         self.wemb_matrix_path = '../../data/pickles/index_wemb_matrix.pkl'
 
         self.train_story = None
@@ -132,7 +132,7 @@ class DSSM_BLSTM_Model(object):
         
         for k,v in doc_updates.items() + query_updates.items():
             if k in all_params:
-                continue
+                all_params[k] += v
             else:
                 all_params[k] = v
 
@@ -279,6 +279,7 @@ class DSSM_BLSTM_Model(object):
         test_threshold = 2000.0
         prev_percetage = 0.0
         speed = 0.0
+        batch_count = 0.0
 
         for epoch in range(N_EPOCHS):
             print "epoch ", epoch,":"
@@ -288,7 +289,7 @@ class DSSM_BLSTM_Model(object):
 
             start_time = time.time()
 
-            batch_count = 0.0
+            
             for batch in range(max_batch):
                 batch_index_list = [shuffled_index_list[i] for i in range(batch * N_BATCH, (batch+1) * N_BATCH)]
                 train_story = [self.train_story[index] for index in batch_index_list]
@@ -315,7 +316,7 @@ class DSSM_BLSTM_Model(object):
                     speed = N_BATCH * 10.0 / (time.time() - start_time)
                     start_time = time.time()
 
-                percetage = (batch_count % test_threshold) / test_threshold * 100
+                percetage = ((batch_count % test_threshold)+1) / test_threshold * 100
                 if percetage - prev_percetage >= 1:
                     utils.progress_bar(percetage, speed)
 
@@ -332,7 +333,7 @@ class DSSM_BLSTM_Model(object):
                         print "new best! test on test set..."
                         best_val_accuracy = val_result
                         self.saving_model('val', best_val_accuracy)
-                        pickle.dump(val_result_list, open('./prediction/BLSTM_best_val_prediction.pkl','wb'))
+                        pickle.dump(val_result_list, open('./prediction/BLSTM_1neg_sep_best_val_prediction.pkl','wb'))
 
                         test_accuracy, test_result_list = self.test_set_test()
                         print "test set accuracy: ", test_accuracy * 100, "%"
@@ -340,7 +341,7 @@ class DSSM_BLSTM_Model(object):
                             best_test_accuracy = test_accuracy
                             print "saving model..."
                             self.saving_model('test', best_test_accuracy)
-                            pickle.dump(test_result_list, open('./prediction/BLSTM_best_test_prediction.pkl','wb'))
+                            pickle.dump(test_result_list, open('./prediction/BLSTM_1neg_sep_best_test_prediction.pkl','wb'))
 
                 batch_count += 1
 
