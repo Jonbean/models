@@ -273,13 +273,13 @@ class DSSM_LSTM_Model(object):
             lasagne.layers.set_all_param_values(self.wemb_layer.output, wemb_all_params)
             lasagne.layers.set_all_param_values(self.story_reasonMLP.output, doc_all_params)
             lasagne.layers.set_all_param_values(self.end_reasonMLP.output, query_all_params)
-            print "This model has ", accuracy, "%  accuracy on valid set" 
+            print "This model has ", accuracy * 100, "%  accuracy on valid set" 
         else:
             wemb_all_params, doc_all_params, query_all_params, accuracy = pickle.load(open(self.best_test_model_save_path))
             lasagne.layers.set_all_param_values(self.wemb_layer.output, wemb_all_params)
             lasagne.layers.set_all_param_values(self.story_reasonMLP.output, doc_all_params)
             lasagne.layers.set_all_param_values(self.end_reasonMLP.output, query_all_params) 
-            print "This model has ", accuracy, "%  accuracy on test set" 
+            print "This model has ", accuracy * 100, "%  accuracy on test set" 
 
     def begin_train(self):
         N_EPOCHS = 30

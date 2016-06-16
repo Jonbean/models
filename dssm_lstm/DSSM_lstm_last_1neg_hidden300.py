@@ -263,12 +263,12 @@ class DSSM_LSTM_Model(object):
             doc_encoder_params, query_encoder_params, accuracy = pickle.load(open(self.best_val_model_save_path))
             lasagne.layers.set_all_param_values(self.doc_encoder.output, doc_encoder_params)
             lasagne.layers.set_all_param_values(self.query_encoder.output, query_encoder_params)
-            print "This model has ", accuracy, "%  accuracy on valid set" 
+            print "This model has ", accuracy * 100, "%  accuracy on valid set" 
         else:
             doc_encoder_params, query_encoder_params, accuracy = pickle.load(open(self.best_test_model_save_path))
             lasagne.layers.set_all_param_values(self.doc_encoder.output, doc_encoder_params)
             lasagne.layers.set_all_param_values(self.query_encoder.output, query_encoder_params) 
-            print "This model has ", accuracy, "%  accuracy on test set" 
+            print "This model has ", accuracy * 100, "%  accuracy on test set" 
 
     def begin_train(self):
         N_EPOCHS = 30
