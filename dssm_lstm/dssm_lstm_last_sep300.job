@@ -1,0 +1,16 @@
+#!/bin/bash
+#$ -S /bin/bash
+#$ -M jontsai@uchicago.edu
+#$ -N sep_las300
+#$ -m beasn
+#$ -r n
+#$ -o sep_las300.out
+#$ -e sep_las300.err
+#$ -cwd 
+
+export OMP_NUM_THREADS=2
+export OPENBLAS_NUM_THREADS=2
+echo "Start - `date`"
+/home-nfs/jontsai/anaconda/bin/python DSSM_lstm_last_1neg_hidden300.py
+echo "Finish - `date`"
+
