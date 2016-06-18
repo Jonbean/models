@@ -41,8 +41,9 @@ class BlstmEncoder(object):
         # The embedding layers with retieve subtensor from word embedding matrix
         l_emb = lasagne.layers.EmbeddingLayer(self.l_in, input_size=self.wemb.get_value().shape[0], output_size=self.wemb.get_value().shape[1], W=self.wemb)
 
+        l_drop = lasagne.layers.DropoutLayer(l_emb, p = 0.15)
         # The LSTM layer should have the same mask input in order to avoid padding entries
-        l_lstm = lasagne.layers.recurrent.LSTMLayer(l_emb, 
+        l_lstm = lasagne.layers.recurrent.LSTMLayer(l_drop, 
                                                     num_units=self.layer1_units,
                                                     # We need to specify a separate input for masks
                                                     mask_input=self.l_mask,
@@ -55,7 +56,7 @@ class BlstmEncoder(object):
 
 
         # The back directional LSTM layers
-        l_lstm_back = lasagne.layers.recurrent.LSTMLayer(l_emb,
+        l_lstm_back = lasagne.layers.recurrent.LSTMLayer(l_drop,
                                                          num_units=self.layer1_units,
                                                          mask_input = self.l_mask,
                                                          ingate=gate_parameters, forgetgate=gate_parameters, 

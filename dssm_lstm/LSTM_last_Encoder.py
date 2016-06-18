@@ -42,6 +42,8 @@ class LstmEncoder(object):
         # The embedding layers with retieve subtensor from word embedding matrix
         l_emb = lasagne.layers.EmbeddingLayer(self.l_in, input_size=self.wemb.get_value().shape[0], output_size=self.wemb.get_value().shape[1], W=self.wemb)
 
+        l_drop = lasagne.layers.DropoutLayer(l_emb, p = 0.15)
+
         # The LSTM layer should have the same mask input in order to avoid padding entries
         l_lstm = lasagne.layers.recurrent.LSTMLayer(l_emb, 
                                                     num_units=self.layer1_units,
@@ -54,16 +56,9 @@ class LstmEncoder(object):
                                                     learn_init=True, grad_clipping=self.GRAD_CLIP
                                                     )
 
-        # The second LSTM layer on top of the first LSTM layer
 
 
-        #here we shuffle the dimension of the 3D output of matrix of l_lstm2 because
-        #pooling layer's gonna collapse the trailling axes
-        l_shuffle = lasagne.layers.DimshuffleLayer(l_lstm, (0,2,1))
-
-        l_pooling = lasagne.layers.GlobalPoolLayer(l_shuffle)
-
-        l_out = l_pooling
+        l_out = lasagne.layers.SliceLayer(l_lstm, -1, 1)
 
         #we only record the output(shall we record each layer???)
         self.output = l_out
