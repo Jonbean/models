@@ -300,7 +300,7 @@ class DSSM_LSTM_Model(object):
 
             start_time = time.time()
 
-            
+            total_cost = 0.0
             for batch in range(max_batch):
                 batch_index_list = [shuffled_index_list[i] for i in range(batch * N_BATCH, (batch+1) * N_BATCH)]
                 train_story = [self.train_story[index] for index in batch_index_list]
@@ -319,17 +319,10 @@ class DSSM_LSTM_Model(object):
                 train_ending_mask = utils.mask_generator(train_ending)
                 neg_ending1_mask = utils.mask_generator(neg_end1)
 
-                self.train_func(train_story_matrix, train_story_mask, 
+                cost = self.train_func(train_story_matrix, train_story_mask, 
                                 train_ending_matrix, train_ending_mask,
                                 neg_ending1_matrix, neg_ending1_mask)
 
-                if batch_count != 0 and batch_count % 10 == 0:
-                    speed = N_BATCH * 10.0 / (time.time() - start_time)
-                    start_time = time.time()
-
-                percentage = ((batch_count % test_threshold) + 1) / test_threshold * 100
-                if percentage - prev_percentage >= 1:
-                    utils.progress_bar(percentage, speed)
 
                 # peek on val set every 5000 instances(1000 batches)
                 if batch_count % test_threshold == 0:
@@ -355,6 +348,11 @@ class DSSM_LSTM_Model(object):
                             pickle.dump(test_result_list, open('./prediction/LSTM_last_1neg_sharewemb_best_test_prediction.pkl','wb'))
 
                 batch_count += 1
+            speed = max_batch * N_BATCH / (time.time() - start_time)
+            print "average speed: ", speed, "instances/sec"
+            total_cost += cost
+            print ""
+            print "total cost in this epoch: ", total_cost
 
         print "reload best model for testing on test set"
         self.reload_model('val')

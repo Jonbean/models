@@ -321,6 +321,7 @@ class DSSM_BLSTM_Model(object):
         speed = 0.0
         batch_count = 0.0
 
+
         for epoch in range(N_EPOCHS):
             print "epoch ", epoch,":"
             shuffled_index_list = utils.shuffle_index(N_TRAIN_INS)
@@ -352,13 +353,6 @@ class DSSM_BLSTM_Model(object):
                                         train_ending_matrix, train_ending_mask,
                                         neg_ending1_matrix, neg_ending1_mask)
 
-                if batch_count != 0 and batch_count % 10 == 0:
-                    speed = N_BATCH * 10.0 / (time.time() - start_time)
-                    start_time = time.time()
-
-                percetage = ((batch_count % test_threshold)+1) / test_threshold * 100
-                if percetage - prev_percetage >= 1:
-                    utils.progress_bar(percetage, speed)
 
                 # peek on val set every 5000 instances(1000 batches)
                 if batch_count % test_threshold == 0:
@@ -384,6 +378,10 @@ class DSSM_BLSTM_Model(object):
                             pickle.dump(test_result_list, open('./prediction/BLSTM_1neg_sharewemb_best_test_prediction.pkl','wb'))
 
                 batch_count += 1
+
+            speed = max_batch * N_BATCH / (time.time() - start_time)
+            print "average speed: ", speed, "instances/sec"
+
             total_cost += cost
             print ""
             print "total cost in this epoch: ", total_cost
