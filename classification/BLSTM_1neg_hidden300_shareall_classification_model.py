@@ -360,13 +360,6 @@ class DSSM_BLSTM_Model(object):
                                              train_end2_matrix, train_end2_mask)
 
                 total_err_count += (prediction - answer).sum()
-                if batch_count != 0 and batch_count % 10 == 0:
-                    speed = N_BATCH * 10.0 / (time.time() - start_time)
-                    start_time = time.time()
-
-                percetage = ((batch_count % test_threshold)+1) / test_threshold * 100
-                if percetage - prev_percetage >= 1:
-                    utils.progress_bar(percetage, speed)
 
                 # peek on val set every 5000 instances(1000 batches)
                 if batch_count % test_threshold == 0:
@@ -394,6 +387,9 @@ class DSSM_BLSTM_Model(object):
                 batch_count += 1
             total_cost += cost
             accuracy = 1-(total_err_count/(max_batch*N_BATCH))
+            speed = max_batch * N_BATCH / (time.time() - start_time)
+            print "average speed: ", speed, "instances/sec"
+
             print ""
             print "total cost in this epoch: ", total_cost
             print "accuracy in this epoch: ", accuracy * 100, "%"

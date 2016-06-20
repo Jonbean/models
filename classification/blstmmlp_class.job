@@ -1,0 +1,16 @@
+#!/bin/bash
+#$ -S /bin/bash
+#$ -M jontsai@uchicago.edu
+#$ -N blstmmlpc
+#$ -m beasn
+#$ -r n
+#$ -o blstmmlpc.out
+#$ -e blstmmlpc.err
+#$ -cwd 
+
+export OMP_NUM_THREADS=4
+export OPENBLAS_NUM_THREADS=4
+echo "Start - `date`"
+/home-nfs/jontsai/anaconda/bin/python BLSTM_1neg_hidden300_shareall_classification_model.py
+echo "Finish - `date`"
+

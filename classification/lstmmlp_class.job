@@ -1,0 +1,16 @@
+#!/bin/bash
+#$ -S /bin/bash
+#$ -M jontsai@uchicago.edu
+#$ -N lstmmlpc
+#$ -m beasn
+#$ -r n
+#$ -o lstmmlpc.out
+#$ -e lstmmlpc.err
+#$ -cwd 
+
+export OMP_NUM_THREADS=4
+export OPENBLAS_NUM_THREADS=4
+echo "Start - `date`"
+/home-nfs/jontsai/anaconda/bin/python LSTM_1neg_classification_model.py
+echo "Finish - `date`"
+
