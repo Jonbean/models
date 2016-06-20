@@ -7,10 +7,9 @@ import time
 import utils
 import cPickle as pickle
 import collections
-import BLSTM_Encoder
-import MLP_Encoder
+import LSTMMLP_Encoder
 
-class DSSM_BLSTM_Model(object):
+class LSTMMLP_Model(object):
     def __init__(self):
         # Initialize Theano Symbolic variable attributes
         self.story_input_variable = None
@@ -40,9 +39,11 @@ class DSSM_BLSTM_Model(object):
         self.train_set_path = '../../data/pickles/train_index_corpus.pkl'
         self.val_set_path = '../../data/pickles/val_index_corpus.pkl'
         self.test_set_path = '../../data/pickles/test_index_corpus.pkl' 
-        self.best_val_model_save_path = './best_models_params/BLSTM_neg1_300_sharewemb_best_val_model_params.pkl'
-        self.best_test_model_save_path = './best_models_params/BLSTM_neg1_300_sharewemb_best_test_model_params.pkl'
+        self.best_val_model_save_path = './best_models_params/LSTMMLP_class_best_val_model_params.pkl'
+        self.best_test_model_save_path = './best_models_params/LSTMMLP_class_best_test_model_params.pkl'
         self.wemb_matrix_path = '../../data/pickles/index_wemb_matrix.pkl'
+        self.best_val_wemb_save_path = './best_models_params/LSTMMLP_class_best_val_model_wemb.pkl'
+        self.best_test_wemb_save_path = './best_models_params/LSTMMLP_class_best_test_model_wemb.pkl'
 
         self.train_story = None
         self.train_ending = None
@@ -96,92 +97,86 @@ class DSSM_BLSTM_Model(object):
         neg_ending1_reshape_input = self.neg_ending1_input_variable.reshape([neg_ending1_batchsize, neg_ending1_seqlen,1])
 
 
-        self.wemb_layer = BLSTM_Encoder.BlstmEncoder(300)
+        self.reason_layer = LSTMMLP_Encoder.LstmMlpEncoder(LSTMLAYER_1_UNITS = 300, MLP_layer1 = 500, MLP_layer2 = 300)
 
-        self.wemb_layer.build_model(self.wemb)
+        self.reason_layer.build_model(self.wemb)
 
-        self.doc_encode_train = lasagne.layers.get_output(self.wemb_layer.output, 
-                                                    {self.wemb_layer.l_in:story_reshape_input, 
-                                                     self.wemb_layer.l_mask:self.story_mask},deterministic = False)
+        self.story_encode_train = lasagne.layers.get_output(self.reason_layer.output, 
+                                                    {self.reason_layer.l_in:story_reshape_input, 
+                                                     self.reason_layer.l_mask:self.story_mask},deterministic = False)
 
-        self.pos_query_encode_train = lasagne.layers.get_output(self.wemb_layer.output, 
-                                                        {self.wemb_layer.l_in:ending_reshape_input, 
-                                                         self.wemb_layer.l_mask:self.ending_mask},deterministic = False)
+        self.end1_encode_train = lasagne.layers.get_output(self.reason_layer.output, 
+                                                        {self.reason_layer.l_in:ending_reshape_input, 
+                                                         self.reason_layer.l_mask:self.ending_mask},deterministic = False)
 
-        self.neg_query_encode_train = lasagne.layers.get_output(self.wemb_layer.output, 
-                                                        {self.wemb_layer.l_in:neg_ending1_reshape_input, 
-                                                         self.wemb_layer.l_mask:self.neg_ending1_mask},deterministic = False)
+        self.end2_encode_train = lasagne.layers.get_output(self.reason_layer.output, 
+                                                        {self.reason_layer.l_in:neg_ending1_reshape_input, 
+                                                         self.reason_layer.l_mask:self.neg_ending1_mask},deterministic = False)
 
-        self.doc_encode_test = lasagne.layers.get_output(self.wemb_layer.output, 
-                                                    {self.wemb_layer.l_in:story_reshape_input, 
-                                                     self.wemb_layer.l_mask:self.story_mask},deterministic = True)
+        self.story_encode_test = lasagne.layers.get_output(self.reason_layer.output, 
+                                                    {self.reason_layer.l_in:story_reshape_input, 
+                                                     self.reason_layer.l_mask:self.story_mask},deterministic = True)
 
-        self.pos_query_encode_test = lasagne.layers.get_output(self.wemb_layer.output, 
-                                                        {self.wemb_layer.l_in:ending_reshape_input, 
-                                                         self.wemb_layer.l_mask:self.ending_mask},deterministic = True)
+        self.end1_encode_test = lasagne.layers.get_output(self.reason_layer.output, 
+                                                        {self.reason_layer.l_in:ending_reshape_input, 
+                                                         self.reason_layer.l_mask:self.ending_mask},deterministic = True)
 
-        self.neg_query_encode_test = lasagne.layers.get_output(self.wemb_layer.output, 
-                                                        {self.wemb_layer.l_in:neg_ending1_reshape_input, 
-                                                         self.wemb_layer.l_mask:self.neg_ending1_mask},deterministic = True)
+        self.end2_encode_test = lasagne.layers.get_output(self.reason_layer.output, 
+                                                        {self.reason_layer.l_in:neg_ending1_reshape_input, 
+                                                         self.reason_layer.l_mask:self.neg_ending1_mask},deterministic = True)
 
-        self.story_reasonMLP = MLP_Encoder.MLPEncoder(500,300)
-        self.end_reasonMLP = MLP_Encoder.MLPEncoder(500,300)
+        story_in = lasagne.layers.InputLayer(shape=(None, 300, 1))
+        end1_in = lasagne.layers.InputLayer(shape=(None, 300, 1))
+        end2_in = lasagne.layers.InputLayer(shape=(None, 300, 1))
 
-        self.story_reasonMLP.build_model(300)
-        self.end_reasonMLP.build_model(300)
-
-        self.story_encode_train = lasagne.layers.get_output(self.story_reasonMLP.output,
-                                                      {self.story_reasonMLP.l_in:self.doc_encode_train}, deterministic = False)
-        self.pos_end_encode_train = lasagne.layers.get_output(self.end_reasonMLP.output,
-                                                        {self.end_reasonMLP.l_in:self.pos_query_encode_train}, deterministic = False)
-        self.neg_end_encode_train = lasagne.layers.get_output(self.end_reasonMLP.output,
-                                                        {self.end_reasonMLP.l_in:self.neg_query_encode_train}, deterministic = False)
-
-        self.story_encode_test = lasagne.layers.get_output(self.story_reasonMLP.output,
-                                                      {self.story_reasonMLP.l_in:self.doc_encode_test}, deterministic = True)
-        self.pos_end_encode_test = lasagne.layers.get_output(self.end_reasonMLP.output,
-                                                        {self.end_reasonMLP.l_in:self.pos_query_encode_test}, deterministic = True)
-        self.neg_end_encode_test = lasagne.layers.get_output(self.end_reasonMLP.output,
-                                                        {self.end_reasonMLP.l_in:self.neg_query_encode_test}, deterministic = True)
-
-
-
-
+        classif_in = lasagne.layers.ConcatLayer([story_in, end1_in, end2_in])
         # Construct symbolic cost function
-        pos_cos_vec_train = self.batch_cosine(self.story_encode_train, self.pos_end_encode_train)
-        neg_cos_vec_train = self.batch_cosine(self.story_encode_train, self.neg_end_encode_test)
+        targets = T.matrix('gold_target', dtype= theano.config.floatX)
 
-        pos_cos_vec_test = self.batch_cosine(self.story_encode_test, self.pos_end_encode_test)
-        self.cost = (neg_cos_vec_train - pos_cos_vec_train).sum()
-        self.val_test_cos = pos_cos_vec_test.sum()
+        
+
+        classification_layer1 = lasagne.layers.DenseLayer(classif_in, num_units = 500,
+                                                          nonlinearity=lasagne.nonlinearities.tanh,
+                                                          W=lasagne.init.GlorotUniform())
+
+        self.classification_layer2 = lasagne.layers.DenseLayer(classification_layer1, num_units = 2,
+                                                          nonlinearity = lasagne.nonlinearities.softmax)
+
+        softmax_output_train = lasagne.layers.get_output(self.classification_layer2, 
+                                                        {story_in: self.story_encode_train,
+                                                         end1_in: self.end1_encode_train,
+                                                         end2_in:self.end2_encode_train},deterministic = True)
+
+        softmax_output_test = lasagne.layers.get_output(self.classification_layer2,
+                                                        {story_in: self.story_encode_test,
+                                                        end1_in: self.end1_encode_test,
+                                                        end2_in: self.end2_encode_test}, deterministic = True)
+
+        classi_out_params = lasagne.layers.get_all_params(self.classification_layer2)
+        
+        self.cost = lasagne.objectives.categorical_crossentropy(softmax_output_train, targets).sum()
+
+        self.predict = np.argmax(softmax_output_test, axis = 1)
         # Retrieve all parameters from the network
 
-        wemb_params = self.wemb_layer.all_params
-        storyreason_params = self.story_reasonMLP.all_params
-        endreason_params = self.end_reasonMLP.all_params
-        
-        wemb_updates = lasagne.updates.adam(self.cost, wemb_params)
-        story_reason_updates = lasagne.updates.adam(self.cost, storyreason_params)
-        end_reason_updates = lasagne.updates.adam(self.cost, endreason_params)
+        all_params = self.reason_layer.all_params + classi_out_params
 
-        all_updates = wemb_updates.items() + story_reason_updates.items() + end_reason_updates.items()
         
-        # for k,v in doc_updates.items() + query_updates.items():
-        #     if k in all_params:
-        #         continue
-        #     else:
-        #         all_params[k] = v
+        all_updates = lasagne.updates.adam(self.cost, all_params)
+
 
         self.train_func = theano.function([self.story_input_variable, self.story_mask, 
                                      self.ending_input_variable, self.ending_mask,
-                                     self.neg_ending1_input_variable, self.neg_ending1_mask],
+                                     self.neg_ending1_input_variable, self.neg_ending1_mask,
+                                     targets],
                                      self.cost, updates = all_updates)
 
         # Compute adam updates for training
 
-        self.compute_cost = theano.function([self.story_input_variable, self.story_mask, 
-                                     self.ending_input_variable, self.ending_mask],
-                                     self.val_test_cos)
+        self.prediction = theano.function([self.story_input_variable, self.story_mask, 
+                                     self.ending_input_variable, self.ending_mask,
+                                     self.neg_ending1_input_variable, self.neg_ending1_mask],
+                                     self.predict)
 
 
     def load_data(self):
@@ -223,7 +218,7 @@ class DSSM_BLSTM_Model(object):
     def val_set_test(self):
 
         correct = 0.
-        result_list = np.zeros((self.n_val, 3))
+        result_list = np.zeros((self.n_val, 2))
 
         for i in range(self.n_val):
             story = np.asarray(self.val_story[i], dtype='int64').reshape((1,-1))
@@ -235,20 +230,15 @@ class DSSM_BLSTM_Model(object):
             ending2 = np.asarray(self.val_ending2[i], dtype='int64').reshape((1,-1))
             ending2_mask = np.ones((1, len(self.val_ending2[i])))
 
-            cos1 = self.compute_cost(story, story_mask, ending1, ending1_mask)
-            cos2 = self.compute_cost(story, story_mask, ending2, ending2_mask)
-
+            prediction = self.prediction(story, story_mask, ending1, ending1_mask, ending2, ending2_mask)
+            
             # Answer denotes the index of the anwer
-            predict_answer = 0
-            if cos1 < cos2:
-                predict_answer = 1
 
-            if predict_answer == self.val_answer[i]:
+            if prediction == self.val_answer[i]:
                 correct += 1.
 
-            result_list[i][0] = cos1
-            result_list[i][1] = cos2
-            result_list[i][2] = predict_answer+1
+            result_list[i][0] = prediction
+            result_list[i][1] = self.val_answer[i]
 
 
         return correct/self.n_val, result_list
@@ -256,7 +246,7 @@ class DSSM_BLSTM_Model(object):
     def test_set_test(self):
         #load test set data
         correct = 0.
-        result_list = np.zeros((self.n_val, 3))
+        result_list = np.zeros((self.n_test, 2))
 
         for i in range(self.n_test):
             story = np.asarray(self.test_story[i], dtype='int64').reshape((1,-1))
@@ -268,46 +258,43 @@ class DSSM_BLSTM_Model(object):
             ending2 = np.asarray(self.test_ending2[i], dtype='int64').reshape((1,-1))
             ending2_mask = np.ones((1, len(self.test_ending2[i])))
 
-            cos1 = self.compute_cost(story, story_mask, ending1, ending1_mask)
-            cos2 = self.compute_cost(story, story_mask, ending2, ending2_mask)
-
+            prediction = self.prediction(story, story_mask, ending1, ending1_mask, ending2, ending2_mask)
+            
             # Answer denotes the index of the anwer
-            predict_answer = 0
-            if cos1 < cos2:
-                predict_answer = 1
 
-            if predict_answer == self.test_answer[i]:
+            if prediction == self.test_answer[i]:
                 correct += 1.
 
-            result_list[i][0] = cos1
-            result_list[i][1] = cos2
-            result_list[i][2] = predict_answer+1
+            result_list[i][0] = prediction
+            result_list[i][1] = self.test_answer[i]
+
 
         return correct/self.n_test, result_list
 
 
     def saving_model(self, val_or_test, accuracy):
-        wemb_all_params_value = lasagne.layers.get_all_param_values(self.wemb_layer.output)
-        doc_all_params_value = lasagne.layers.get_all_param_values(self.story_reasonMLP.output)
-        query_all_params_value = lasagne.layers.get_all_param_values(self.end_reasonMLP.output)
+        reason_params_value = lasagne.layers.get_all_param_values(self.reason_layer.output)
+        classif_params_value = lasagne.layers.get_all_param_values(self.classification_layer2)
+
         if val_or_test == 'val':
-            pickle.dump((wemb_all_params_value, doc_all_params_value, query_all_params_value, accuracy), open(self.best_val_model_save_path, 'wb'))
+            pickle.dump((reason_params_value, classif_params_value, accuracy), 
+                        open(self.best_val_model_save_path, 'wb'))
         else:
-            pickle.dump((wemb_all_params_value, doc_all_params_value, query_all_params_value, accuracy), open(self.best_test_model_save_path, 'wb'))
+            pickle.dump((reason_params_value, classif_params_value, accuracy), 
+                        open(self.best_test_model_save_path, 'wb'))            
 
     def reload_model(self, val_or_test):
         if val_or_test == 'val': 
 
-            wemb_all_params, doc_all_params, query_all_params, accuracy = pickle.load(open(self.best_val_model_save_path))
-            lasagne.layers.set_all_param_values(self.wemb_layer.output, wemb_all_params)
-            lasagne.layers.set_all_param_values(self.story_reasonMLP.output, doc_all_params)
-            lasagne.layers.set_all_param_values(self.end_reasonMLP.output, query_all_params)
+            reason_params, classif_params, accuracy = pickle.load(open(self.best_val_model_save_path))
+            lasagne.layers.set_all_param_values(self.reason_layer.output, reason_params)
+            lasagne.layers.set_all_param_values(self.classification_layer2, classif_params)
+
             print "This model has ", accuracy * 100, "%  accuracy on valid set" 
         else:
-            wemb_all_params, doc_all_params, query_all_params, accuracy = pickle.load(open(self.best_test_model_save_path))
-            lasagne.layers.set_all_param_values(self.wemb_layer.output, wemb_all_params)
-            lasagne.layers.set_all_param_values(self.story_reasonMLP.output, doc_all_params)
-            lasagne.layers.set_all_param_values(self.end_reasonMLP.output, query_all_params) 
+            reason_params, classif_params, accuracy = pickle.load(open(self.best_test_model_save_path))
+            lasagne.layers.set_all_param_values(self.reason_layer.output, reason_params)
+            lasagne.layers.set_all_param_values(self.classification_layer2, classif_params_value)
             print "This model has ", accuracy * 100, "%  accuracy on test set" 
 
     def begin_train(self):
@@ -330,6 +317,8 @@ class DSSM_BLSTM_Model(object):
             start_time = time.time()
 
             total_cost = 0.0
+            total_err_count = 0.0
+
             for batch in range(max_batch):
                 batch_index_list = [shuffled_index_list[i] for i in range(batch * N_BATCH, (batch+1) * N_BATCH)]
                 train_story = [self.train_story[index] for index in batch_index_list]
@@ -340,18 +329,37 @@ class DSSM_BLSTM_Model(object):
                     neg_end_index_list = np.random.randint(N_TRAIN_INS, size = (N_BATCH,))
                 neg_end1 = [self.train_ending[index] for index in neg_end_index_list]
 
+                answer = np.random.randint(2, size = N_BATCH)
+                answer_vec = np.concatenate((answer.reshape(-1,1), (1 - answer).reshape(-1,1)), axis = 1).astype('int64')
+                train_end1 = []
+                train_end2 = []
+                for i in range(N_BATCH):
+                    if answer[i] == 0:
+                        train_end1.append(train_ending[i])
+                        train_end2.append(neg_end1[i])
+                    else:
+                        train_end1.append(neg_end1[i])
+                        train_end2.append(train_ending[i])
+
                 train_story_matrix = utils.padding(train_story)
-                train_ending_matrix = utils.padding(train_ending)
-                neg_ending1_matrix = utils.padding(neg_end1)
+                train_end1_matrix = utils.padding(train_end1)
+                train_end2_matrix = utils.padding(train_end2)
 
                 train_story_mask = utils.mask_generator(train_story)
-                train_ending_mask = utils.mask_generator(train_ending)
-                neg_ending1_mask = utils.mask_generator(neg_end1)
+                train_end1_mask = utils.mask_generator(train_end1)
+                train_end2_mask = utils.mask_generator(train_end2)
+
+                
 
                 cost = self.train_func(train_story_matrix, train_story_mask, 
-                                        train_ending_matrix, train_ending_mask,
-                                        neg_ending1_matrix, neg_ending1_mask)
+                                        train_end1_matrix, train_end1_mask,
+                                        train_end2_matrix, train_end2_mask, answer_vec)
 
+                prediction = self.prediction(train_story_matrix, train_story_mask,
+                                             train_end1_matrix, train_end1_mask,
+                                             train_end2_matrix, train_end2_mask)
+
+                total_err_count += (prediction - answer).sum()
                 if batch_count != 0 and batch_count % 10 == 0:
                     speed = N_BATCH * 10.0 / (time.time() - start_time)
                     start_time = time.time()
@@ -373,7 +381,7 @@ class DSSM_BLSTM_Model(object):
                         print "new best! test on test set..."
                         best_val_accuracy = val_result
                         self.saving_model('val', best_val_accuracy)
-                        pickle.dump(val_result_list, open('./prediction/BLSTM_1neg_sharewemb_best_val_prediction.pkl','wb'))
+                        pickle.dump(val_result_list, open('./prediction/BLSTM_1neg_class_best_val_prediction.pkl','wb'))
 
                         test_accuracy, test_result_list = self.test_set_test()
                         print "test set accuracy: ", test_accuracy * 100, "%"
@@ -381,12 +389,14 @@ class DSSM_BLSTM_Model(object):
                             best_test_accuracy = test_accuracy
                             print "saving model..."
                             self.saving_model('test', best_test_accuracy)
-                            pickle.dump(test_result_list, open('./prediction/BLSTM_1neg_sharewemb_best_test_prediction.pkl','wb'))
+                            pickle.dump(test_result_list, open('./prediction/BLSTM_1neg_class_best_test_prediction.pkl','wb'))
 
                 batch_count += 1
             total_cost += cost
+            accuracy = 1-(total_err_count/(max_batch*N_BATCH))
             print ""
             print "total cost in this epoch: ", total_cost
+            print "accuracy in this epoch: ", accuracy * 100, "%"
 
 
         print "reload best model for testing on test set"
@@ -397,7 +407,7 @@ class DSSM_BLSTM_Model(object):
         print "accuracy is: ", test_result * 100, "%"
 
 def main():
-    model = DSSM_BLSTM_Model()
+    model = LSTMMLP_Model()
 
     print "loading data"
     model.load_data()

@@ -7,8 +7,7 @@ import time
 import utils
 import cPickle as pickle
 import collections
-import BLSTM_Encoder
-import MLP_Encoder
+import BLSTMMLP_Encoder
 
 class DSSM_BLSTM_Model(object):
     def __init__(self):
@@ -40,9 +39,11 @@ class DSSM_BLSTM_Model(object):
         self.train_set_path = '../../data/pickles/train_index_corpus.pkl'
         self.val_set_path = '../../data/pickles/val_index_corpus.pkl'
         self.test_set_path = '../../data/pickles/test_index_corpus.pkl' 
-        self.best_val_model_save_path = './best_models_params/BLSTM_neg1_300_sharewemb_best_val_model_params.pkl'
-        self.best_test_model_save_path = './best_models_params/BLSTM_neg1_300_sharewemb_best_test_model_params.pkl'
+        self.best_val_model_save_path = './best_models_params/BLSTM_neg1_300_shareall_best_val_model_params.pkl'
+        self.best_test_model_save_path = './best_models_params/BLSTM_neg1_300_shareall_best_test_model_params.pkl'
         self.wemb_matrix_path = '../../data/pickles/index_wemb_matrix.pkl'
+        self.best_val_wemb_save_path = './best_models_params/BLSTM_neg1_300_shareall_best_val_model_wemb.pkl'
+        self.best_test_wemb_save_path = './best_models_params/BLSTM_neg1_300_shareall_best_test_model_wemb.pkl'
 
         self.train_story = None
         self.train_ending = None
@@ -96,55 +97,33 @@ class DSSM_BLSTM_Model(object):
         neg_ending1_reshape_input = self.neg_ending1_input_variable.reshape([neg_ending1_batchsize, neg_ending1_seqlen,1])
 
 
-        self.wemb_layer = BLSTM_Encoder.BlstmEncoder(300)
+        self.reason_layer = BLSTMMLP_Encoder.BlstmMlpEncoder(LSTMLAYER_1_UNITS = 300, MLP_layer1 = 500, MLP_layer2 = 300)
 
-        self.wemb_layer.build_model(self.wemb)
+        self.reason_layer.build_model(self.wemb)
 
-        self.doc_encode_train = lasagne.layers.get_output(self.wemb_layer.output, 
-                                                    {self.wemb_layer.l_in:story_reshape_input, 
-                                                     self.wemb_layer.l_mask:self.story_mask},deterministic = False)
+        self.story_encode_train = lasagne.layers.get_output(self.reason_layer.output, 
+                                                    {self.reason_layer.l_in:story_reshape_input, 
+                                                     self.reason_layer.l_mask:self.story_mask},deterministic = False)
 
-        self.pos_query_encode_train = lasagne.layers.get_output(self.wemb_layer.output, 
-                                                        {self.wemb_layer.l_in:ending_reshape_input, 
-                                                         self.wemb_layer.l_mask:self.ending_mask},deterministic = False)
+        self.pos_end_encode_train = lasagne.layers.get_output(self.reason_layer.output, 
+                                                        {self.reason_layer.l_in:ending_reshape_input, 
+                                                         self.reason_layer.l_mask:self.ending_mask},deterministic = False)
 
-        self.neg_query_encode_train = lasagne.layers.get_output(self.wemb_layer.output, 
-                                                        {self.wemb_layer.l_in:neg_ending1_reshape_input, 
-                                                         self.wemb_layer.l_mask:self.neg_ending1_mask},deterministic = False)
+        self.neg_end_encode_train = lasagne.layers.get_output(self.reason_layer.output, 
+                                                        {self.reason_layer.l_in:neg_ending1_reshape_input, 
+                                                         self.reason_layer.l_mask:self.neg_ending1_mask},deterministic = False)
 
-        self.doc_encode_test = lasagne.layers.get_output(self.wemb_layer.output, 
-                                                    {self.wemb_layer.l_in:story_reshape_input, 
-                                                     self.wemb_layer.l_mask:self.story_mask},deterministic = True)
+        self.story_encode_test = lasagne.layers.get_output(self.reason_layer.output, 
+                                                    {self.reason_layer.l_in:story_reshape_input, 
+                                                     self.reason_layer.l_mask:self.story_mask},deterministic = True)
 
-        self.pos_query_encode_test = lasagne.layers.get_output(self.wemb_layer.output, 
-                                                        {self.wemb_layer.l_in:ending_reshape_input, 
-                                                         self.wemb_layer.l_mask:self.ending_mask},deterministic = True)
+        self.pos_end_encode_test = lasagne.layers.get_output(self.reason_layer.output, 
+                                                        {self.reason_layer.l_in:ending_reshape_input, 
+                                                         self.reason_layer.l_mask:self.ending_mask},deterministic = True)
 
-        self.neg_query_encode_test = lasagne.layers.get_output(self.wemb_layer.output, 
-                                                        {self.wemb_layer.l_in:neg_ending1_reshape_input, 
-                                                         self.wemb_layer.l_mask:self.neg_ending1_mask},deterministic = True)
-
-        self.story_reasonMLP = MLP_Encoder.MLPEncoder(500,300)
-        self.end_reasonMLP = MLP_Encoder.MLPEncoder(500,300)
-
-        self.story_reasonMLP.build_model(300)
-        self.end_reasonMLP.build_model(300)
-
-        self.story_encode_train = lasagne.layers.get_output(self.story_reasonMLP.output,
-                                                      {self.story_reasonMLP.l_in:self.doc_encode_train}, deterministic = False)
-        self.pos_end_encode_train = lasagne.layers.get_output(self.end_reasonMLP.output,
-                                                        {self.end_reasonMLP.l_in:self.pos_query_encode_train}, deterministic = False)
-        self.neg_end_encode_train = lasagne.layers.get_output(self.end_reasonMLP.output,
-                                                        {self.end_reasonMLP.l_in:self.neg_query_encode_train}, deterministic = False)
-
-        self.story_encode_test = lasagne.layers.get_output(self.story_reasonMLP.output,
-                                                      {self.story_reasonMLP.l_in:self.doc_encode_test}, deterministic = True)
-        self.pos_end_encode_test = lasagne.layers.get_output(self.end_reasonMLP.output,
-                                                        {self.end_reasonMLP.l_in:self.pos_query_encode_test}, deterministic = True)
-        self.neg_end_encode_test = lasagne.layers.get_output(self.end_reasonMLP.output,
-                                                        {self.end_reasonMLP.l_in:self.neg_query_encode_test}, deterministic = True)
-
-
+        self.neg_end_encode_test = lasagne.layers.get_output(self.reason_layer.output, 
+                                                        {self.reason_layer.l_in:neg_ending1_reshape_input, 
+                                                         self.reason_layer.l_mask:self.neg_ending1_mask},deterministic = True)
 
 
         # Construct symbolic cost function
@@ -156,21 +135,11 @@ class DSSM_BLSTM_Model(object):
         self.val_test_cos = pos_cos_vec_test.sum()
         # Retrieve all parameters from the network
 
-        wemb_params = self.wemb_layer.all_params
-        storyreason_params = self.story_reasonMLP.all_params
-        endreason_params = self.end_reasonMLP.all_params
-        
-        wemb_updates = lasagne.updates.adam(self.cost, wemb_params)
-        story_reason_updates = lasagne.updates.adam(self.cost, storyreason_params)
-        end_reason_updates = lasagne.updates.adam(self.cost, endreason_params)
+        all_params = self.reason_layer.all_params
 
-        all_updates = wemb_updates.items() + story_reason_updates.items() + end_reason_updates.items()
         
-        # for k,v in doc_updates.items() + query_updates.items():
-        #     if k in all_params:
-        #         continue
-        #     else:
-        #         all_params[k] = v
+        all_updates = lasagne.updates.adam(self.cost, all_params)
+
 
         self.train_func = theano.function([self.story_input_variable, self.story_mask, 
                                      self.ending_input_variable, self.ending_mask,
@@ -287,27 +256,26 @@ class DSSM_BLSTM_Model(object):
 
 
     def saving_model(self, val_or_test, accuracy):
-        wemb_all_params_value = lasagne.layers.get_all_param_values(self.wemb_layer.output)
-        doc_all_params_value = lasagne.layers.get_all_param_values(self.story_reasonMLP.output)
-        query_all_params_value = lasagne.layers.get_all_param_values(self.end_reasonMLP.output)
+        all_params_value = lasagne.layers.get_all_param_values(self.reason_layer.output)
+
         if val_or_test == 'val':
-            pickle.dump((wemb_all_params_value, doc_all_params_value, query_all_params_value, accuracy), open(self.best_val_model_save_path, 'wb'))
+            pickle.dump((all_params_value, accuracy), open(self.best_val_model_save_path, 'wb'))
+            pickle.dump(self.wemb.get_value(), open(self.best_val_wemb_save_path, 'wb'))
         else:
-            pickle.dump((wemb_all_params_value, doc_all_params_value, query_all_params_value, accuracy), open(self.best_test_model_save_path, 'wb'))
+            pickle.dump((all_params_value, accuracy), open(self.best_test_model_save_path, 'wb'))            
+            pickle.dump(self.wemb.get_value(), open(self.best_test_wemb_save_path, 'wb'))
 
     def reload_model(self, val_or_test):
         if val_or_test == 'val': 
 
-            wemb_all_params, doc_all_params, query_all_params, accuracy = pickle.load(open(self.best_val_model_save_path))
-            lasagne.layers.set_all_param_values(self.wemb_layer.output, wemb_all_params)
-            lasagne.layers.set_all_param_values(self.story_reasonMLP.output, doc_all_params)
-            lasagne.layers.set_all_param_values(self.end_reasonMLP.output, query_all_params)
+            all_params, accuracy = pickle.load(open(self.best_val_model_save_path))
+            lasagne.layers.set_all_param_values(self.reason_layer.output, all_params)
+            self.wemb.set_value(pickle.load(open(self.best_val_wemb_save_path)))
             print "This model has ", accuracy * 100, "%  accuracy on valid set" 
         else:
-            wemb_all_params, doc_all_params, query_all_params, accuracy = pickle.load(open(self.best_test_model_save_path))
-            lasagne.layers.set_all_param_values(self.wemb_layer.output, wemb_all_params)
-            lasagne.layers.set_all_param_values(self.story_reasonMLP.output, doc_all_params)
-            lasagne.layers.set_all_param_values(self.end_reasonMLP.output, query_all_params) 
+            all_params,accuracy = pickle.load(open(self.best_test_model_save_path))
+            lasagne.layers.set_all_param_values(self.reason_layer.output, all_params)
+            self.wemb.set_value(pickle.load(open(self.best_test_wemb_save_path)))
             print "This model has ", accuracy * 100, "%  accuracy on test set" 
 
     def begin_train(self):
@@ -373,7 +341,7 @@ class DSSM_BLSTM_Model(object):
                         print "new best! test on test set..."
                         best_val_accuracy = val_result
                         self.saving_model('val', best_val_accuracy)
-                        pickle.dump(val_result_list, open('./prediction/BLSTM_1neg_sharewemb_best_val_prediction.pkl','wb'))
+                        pickle.dump(val_result_list, open('./prediction/BLSTM_1neg_shareall_best_val_prediction.pkl','wb'))
 
                         test_accuracy, test_result_list = self.test_set_test()
                         print "test set accuracy: ", test_accuracy * 100, "%"
@@ -381,10 +349,10 @@ class DSSM_BLSTM_Model(object):
                             best_test_accuracy = test_accuracy
                             print "saving model..."
                             self.saving_model('test', best_test_accuracy)
-                            pickle.dump(test_result_list, open('./prediction/BLSTM_1neg_sharewemb_best_test_prediction.pkl','wb'))
+                            pickle.dump(test_result_list, open('./prediction/BLSTM_1neg_shareall_best_test_prediction.pkl','wb'))
 
                 batch_count += 1
-            total_cost += cost
+                total_cost += cost
             print ""
             print "total cost in this epoch: ", total_cost
 
