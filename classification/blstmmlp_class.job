@@ -1,16 +1,21 @@
 #!/bin/bash
+SETTING1="300x500x300" 
+SETTING2="300"
+SETTING3="0.2" 
+SETTING4="30"
 #$ -S /bin/bash
 #$ -M jontsai@uchicago.edu
-#$ -N blstmmlpc
+#$ -N blstmmlpc$SETTING1$SETTING2$SETTING3$SETTING4
 #$ -m beasn
 #$ -r n
-#$ -o blstmmlpc.out
-#$ -e blstmmlpc.err
+#$ -o blstmmlpc$SETTING1$SETTING2$SETTING3$SETTING4.out
+#$ -e blstmmlpc$SETTING1$SETTING2$SETTING3$SETTING4.err
 #$ -cwd 
 
-export OMP_NUM_THREADS=4
-export OPENBLAS_NUM_THREADS=4
+export OMP_NUM_THREADS=2
+export OPENBLAS_NUM_THREADS=2
 echo "Start - `date`"
-/home-nfs/jontsai/anaconda/bin/python BLSTM_1neg_hidden300_shareall_classification_model.py
+/home-nfs/jontsai/anaconda/bin/python BLSTM_1neg_hidden300_shareall_classification_model.py \
+$SETTING1 $SETTING2 $SETTING3 $SETTING4
 echo "Finish - `date`"
 
