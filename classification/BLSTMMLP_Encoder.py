@@ -4,15 +4,19 @@ import lasagne
 import numpy as np
 
 class BlstmMlpEncoder(object):
-    def __init__(self, LSTMLAYER_1_UNITS, MLP_layer1, MLP_layer2):
+    def __init__(self, LSTMLAYER_1_UNITS, MLP_UNITS, dropout_rate):
         self.layer1_units = LSTMLAYER_1_UNITS
-        self.MLP_layer1 = MLP_layer1
-        self.MLP_layer2 = MLP_layer2
+        self.MLP_layer1 = MLP_UNITS[0]
+        if len(MLP_UNITS) > 1:
+            self.MLP_layer2 = MLP_UNITS[1]
+        else:
+            self.MLP_layer2 = None
         self.wemb = None
         self.GRAD_CLIP = 100.
         self.l_in = None
         self.l_mask = None
         self.output = None
+        self.dropout_rate = dropout_rate
 
     def build_model(self, WordEmbedding_Init = None):
 
@@ -43,7 +47,7 @@ class BlstmMlpEncoder(object):
         # The embedding layers with retieve subtensor from word embedding matrix
         l_emb = lasagne.layers.EmbeddingLayer(self.l_in, input_size=self.wemb.get_value().shape[0], output_size=self.wemb.get_value().shape[1], W=self.wemb)
 
-        l_drop = lasagne.layers.DropoutLayer(l_emb, p = 0.1)
+        l_drop = lasagne.layers.DropoutLayer(l_emb, p = self.dropout_rate)
         # The LSTM layer should have the same mask input in order to avoid padding entries
         l_lstm = lasagne.layers.recurrent.LSTMLayer(l_drop, 
                                                     num_units=self.layer1_units,
@@ -82,14 +86,17 @@ class BlstmMlpEncoder(object):
                                             nonlinearity=lasagne.nonlinearities.tanh,
                                             W=lasagne.init.GlorotUniform())
 
-        l_drop2 = lasagne.layers.DropoutLayer(l_mlphid1, p = 0.1)
+        l_drop2 = lasagne.layers.DropoutLayer(l_mlphid1, p = self.dropout_rate)
 
-        l_mlphid2 = lasagne.layers.DenseLayer(l_drop2, num_units=self.MLP_layer2,
-                                            nonlinearity=lasagne.nonlinearities.tanh,
-                                            W=lasagne.init.GlorotUniform())
+        if self.MLP_layer2 == None:
+            self.output = l_mlphid1
+            self.all_params = lasagne.layers.get_all_params(l_mlphid1)
 
-        l_out = l_mlphid2
+        else:
+            l_mlphid2 = lasagne.layers.DenseLayer(l_drop2, num_units=self.MLP_layer2,
+                                                  nonlinearity=lasagne.nonlinearities.tanh,
+                                                  W=lasagne.init.GlorotUniform())
 
-        #we only record the output(shall we record each layer???)
-        self.output = l_out
-        self.all_params = lasagne.layers.get_all_params(l_out)
+
+            self.output = l_mlphid2
+            self.all_params = lasagne.layers.get_all_params(l_mlphid2)

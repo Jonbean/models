@@ -9,11 +9,12 @@ import cPickle as pickle
 import collections
 import BLSTMMLP_Encoder
 import MLP_classifier
+import sys
 
 theano.config.optimizer = 'None'
 
 class DSSM_BLSTM_Model(object):
-    def __init__(self):
+    def __init__(self, blstmmlp_setting, classmlp1_setting, dropout_rate, batchsize, random_init_wemb):
         # Initialize Theano Symbolic variable attributes
         self.story_input_variable = None
         self.story_mask = None
@@ -42,11 +43,17 @@ class DSSM_BLSTM_Model(object):
         self.train_set_path = '../../data/pickles/train_index_corpus.pkl'
         self.val_set_path = '../../data/pickles/val_index_corpus.pkl'
         self.test_set_path = '../../data/pickles/test_index_corpus.pkl' 
-        self.best_val_model_save_path = './best_models_params/BLSTM_neg1_300_class_best_val_model_params.pkl'
-        self.best_test_model_save_path = './best_models_params/BLSTM_neg1_300_class_best_test_model_params.pkl'
+        self.best_val_model_save_path = './best_models_params/BLSTMLP_'+blstmmlp_setting+'_classmlp1_'+\
+                                        classmlp1_setting+'dropout'+dropout_rate+'_batch_'+batchsize+'_best_val.pkl'
+        self.best_test_model_save_path = './best_models_params/BLSTMLP_'+blstmmlp_setting+'_classmlp1_'+\
+                                        classmlp1_setting+'dropout'+dropout_rate+'_batch_'+batchsize+'_best_test.pkl'
         self.wemb_matrix_path = '../../data/pickles/index_wemb_matrix.pkl'
-        self.best_val_wemb_save_path = './best_models_params/BLSTM_neg1_300_class_best_val_model_wemb.pkl'
-        self.best_test_wemb_save_path = './best_models_params/BLSTM_neg1_300_class_best_test_model_wemb.pkl'
+        self.blstm_units = int(blstmmlp_setting.split('x')[0])
+        self.mlp_units = [int(elem) for elem in blstmmlp_setting.split('x')[1:]]
+        self.classmlp1_setting = [int(elem) for elem in classmlp1_setting.split('x')]
+        self.dropout_rate = float(dropout_rate)
+        self.batchsize = int(batchsize)
+        self.random_init_wemb = random_init_wemb
 
         self.train_story = None
         self.train_ending = None
@@ -76,10 +83,7 @@ class DSSM_BLSTM_Model(object):
         return batch_cosine_vec
 
 
-    def model_constructor(self, wemb_matrix_path = None):
-        if wemb_matrix_path != None:
-            self.wemb = theano.shared(pickle.load(open(wemb_matrix_path))).astype(theano.config.floatX)
-
+    def model_constructor(self, wemb_size = None):
 
         self.story_input_variable = T.matrix('story_input', dtype='int64')
         self.story_mask = T.matrix('story_mask', dtype=theano.config.floatX)
@@ -99,7 +103,8 @@ class DSSM_BLSTM_Model(object):
         ending2_batch_size, ending2_seqlen = self.ending2_input_variable.shape
         ending2_reshape_input = self.ending2_input_variable.reshape([ending2_batch_size, ending2_seqlen, 1])
 
-        self.reason_layer = BLSTMMLP_Encoder.BlstmMlpEncoder(LSTMLAYER_1_UNITS = 300, MLP_layer1 = 500, MLP_layer2 = 300)
+        self.reason_layer = BLSTMMLP_Encoder.BlstmMlpEncoder(LSTMLAYER_1_UNITS = self.blstm_units, MLP_UNITS = self.mlp_units,
+                                                            dropout_rate = self.dropout_rate)
 
         self.reason_layer.build_model(self.wemb)
 
@@ -132,7 +137,7 @@ class DSSM_BLSTM_Model(object):
         target1 = T.matrix('gold_target', dtype= theano.config.floatX)
         target2 = T.matrix('gold_target', dtype= theano.config.floatX)
 
-        self.classify_layer = MLP_classifier.MlpClassifier(300, 300, 500, 300)
+        self.classify_layer = MLP_classifier.MlpClassifier(self.mlp_units[-1], self.mlp_units[-1], self.classmlp1_setting)
 
 
         sigmoid_end1_train = lasagne.layers.get_output(self.classify_layer.output,{self.classify_layer.story_in: self.story_encode_train,
@@ -195,7 +200,12 @@ class DSSM_BLSTM_Model(object):
         self.test_answer = test_set[3]
         self.n_test = len(self.test_answer)
 
-        self.wemb = theano.shared(pickle.load(open(self.wemb_matrix_path))).astype(theano.config.floatX)
+        if self.random_init_wemb:
+            wemb = np.random.rand(28820 ,wemb_size)
+            wemb = np.concatenate((np.zeros((1, wemb_size)), wemb), axis = 0)
+            self.wemb = theano.shared(wemb).astype(theano.config.floatX)
+        else:
+            self.wemb = theano.shared(pickle.load(open(self.wemb_matrix_path))).astype(theano.config.floatX)
 
     def fake_load_data(self):
         self.train_story = np.random.randint(1000, size = (1000, 20)).astype('int64')
@@ -305,7 +315,7 @@ class DSSM_BLSTM_Model(object):
 
     def begin_train(self):
         N_EPOCHS = 30
-        N_BATCH = 20
+        N_BATCH = self.batchsize
         N_TRAIN_INS = len(self.train_ending)
         best_val_accuracy = 0
         best_test_accuracy = 0
@@ -423,8 +433,11 @@ class DSSM_BLSTM_Model(object):
         test_result = self.test_set_test()
         print "accuracy is: ", test_result * 100, "%"
 
-def main():
-    model = DSSM_BLSTM_Model()
+def main(argv):
+    random_init_wemb = False
+    if len(argv) > 4:
+        random_init_wemb = argv[4]
+    model = DSSM_BLSTM_Model(argv[0], argv[1], argv[2], argv[3], random_init_wemb)
 
     print "loading data"
     model.load_data()
@@ -437,6 +450,6 @@ def main():
     model.begin_train()
     
 if __name__ == '__main__':
-    main()
+    main(sys.argv[1:])
 
 
