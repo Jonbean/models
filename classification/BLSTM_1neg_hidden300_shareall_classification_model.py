@@ -42,11 +42,11 @@ class DSSM_BLSTM_Model(object):
         self.train_set_path = '../../data/pickles/train_index_corpus.pkl'
         self.val_set_path = '../../data/pickles/val_index_corpus.pkl'
         self.test_set_path = '../../data/pickles/test_index_corpus.pkl' 
-        self.best_val_model_save_path = './best_models_params/BLSTM_neg1_300_class_best_val_model_params.pkl'
-        self.best_test_model_save_path = './best_models_params/BLSTM_neg1_300_class_best_test_model_params.pkl'
+        self.best_val_model_save_path = './best_models_params/BLSTMMLP_logistic600x500x2_class_best_val_model_params.pkl'
+        self.best_test_model_save_path = './best_models_params/BLSTMMLP_logistic600x500x2_class_best_test_model_params.pkl'
         self.wemb_matrix_path = '../../data/pickles/index_wemb_matrix.pkl'
-        self.best_val_wemb_save_path = './best_models_params/BLSTM_neg1_300_class_best_val_model_wemb.pkl'
-        self.best_test_wemb_save_path = './best_models_params/BLSTM_neg1_300_class_best_test_model_wemb.pkl'
+        self.best_val_wemb_save_path = './best_models_params/BLSTMMLP_logistic600x500x2_class_best_val_model_wemb.pkl'
+        self.best_test_wemb_save_path = './best_models_params/BLSTMMLP_logistic600x500x2_class_best_test_model_wemb.pkl'
 
         self.train_story = None
         self.train_ending = None
@@ -386,7 +386,7 @@ class DSSM_BLSTM_Model(object):
                         print "new best! test on test set..."
                         best_val_accuracy = val_result
                         self.saving_model('val', best_val_accuracy)
-                        pickle.dump(val_result_list, open('./prediction/BLSTM_1neg_class_best_val_prediction.pkl','wb'))
+                        pickle.dump(val_result_list, open('./prediction/BLSTMMLP_logistic600x500x2_class_best_val_prediction.pkl','wb'))
 
                         test_accuracy, test_result_list = self.test_set_test()
                         print "test set accuracy: ", test_accuracy * 100, "%"
@@ -394,7 +394,7 @@ class DSSM_BLSTM_Model(object):
                             best_test_accuracy = test_accuracy
                             print "saving model..."
                             self.saving_model('test', best_test_accuracy)
-                            pickle.dump(test_result_list, open('./prediction/BLSTM_1neg_class_best_test_prediction.pkl','wb'))
+                            pickle.dump(test_result_list, open('./prediction/BLSTMMLP_logistic600x500x2_class_best_test_prediction.pkl','wb'))
 
                 batch_count += 1
             total_cost += cost
