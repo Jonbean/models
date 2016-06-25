@@ -14,7 +14,7 @@ import sys
 theano.config.optimizer = 'None'
 
 class DSSM_BLSTM_Model(object):
-    def __init__(self, blstmmlp_setting, classmlp1_setting, dropout_rate, batchsize, random_init_wemb):
+    def __init__(self, blstmmlp_setting, classmlp1_setting, dropout_rate, batchsize, wemb_size = None):
         # Initialize Theano Symbolic variable attributes
         self.story_input_variable = None
         self.story_mask = None
@@ -53,7 +53,12 @@ class DSSM_BLSTM_Model(object):
         self.classmlp1_setting = [int(elem) for elem in classmlp1_setting.split('x')]
         self.dropout_rate = float(dropout_rate)
         self.batchsize = int(batchsize)
-        self.random_init_wemb = random_init_wemb
+        self.wemb_size = 300
+        if wemb_size == None:
+            self.random_init_wemb = False
+        else:
+            self.random_init_wemb = True
+            self.wemb_size = int(wemb_size)
 
         self.train_story = None
         self.train_ending = None
@@ -428,10 +433,10 @@ class DSSM_BLSTM_Model(object):
         print "accuracy is: ", test_result * 100, "%"
 
 def main(argv):
-    random_init_wemb = False
+    wemb_size = None
     if len(argv) > 4:
-        random_init_wemb = argv[4]
-    model = DSSM_BLSTM_Model(argv[0], argv[1], argv[2], argv[3], random_init_wemb)
+        wemb_size = argv[4]
+    model = DSSM_BLSTM_Model(argv[0], argv[1], argv[2], argv[3], wemb_size)
 
     print "loading data"
     model.load_data()
