@@ -206,8 +206,8 @@ class DSSM_BLSTM_Model(object):
         self.n_test = len(self.test_answer)
 
         if self.random_init_wemb:
-            wemb = np.random.rand(28820 ,wemb_size)
-            wemb = np.concatenate((np.zeros((1, wemb_size)), wemb), axis = 0)
+            wemb = np.random.rand(28820 ,self.wemb_size)
+            wemb = np.concatenate((np.zeros((1, self.wemb_size)), wemb), axis = 0)
             self.wemb = theano.shared(wemb).astype(theano.config.floatX)
         else:
             self.wemb = theano.shared(pickle.load(open(self.wemb_matrix_path))).astype(theano.config.floatX)
