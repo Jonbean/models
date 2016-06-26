@@ -1,0 +1,23 @@
+#!/bin/bash
+
+#$ -S /bin/bash
+#$ -M jontsai@uchicago.edu
+#$ -N blstmmlpc10
+#$ -m beasn
+#$ -r n
+#$ -o blstmmlpc10.out
+#$ -e blstmmlpc10.err
+#$ -cwd 
+
+SETTING1="300x300x300" 
+SETTING2="300x500"
+SETTING3="0.1" 
+SETTING4="20"
+
+export OMP_NUM_THREADS=2
+export OPENBLAS_NUM_THREADS=2
+echo "Start - `date`"
+/home-nfs/jontsai/anaconda/bin/python BLSTMMLP_classification_model.py \
+$SETTING1 $SETTING2 $SETTING3 $SETTING4
+echo "Finish - `date`"
+
