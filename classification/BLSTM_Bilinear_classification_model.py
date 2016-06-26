@@ -310,7 +310,7 @@ class DSSM_BLSTM_Model(object):
         N_TRAIN_INS = len(self.train_ending)
         best_val_accuracy = 0
         best_test_accuracy = 0
-        test_threshold = 5000.0/N_BATCH
+        test_threshold = 5000/N_BATCH
         prev_percetage = 0.0
         speed = 0.0
         batch_count = 0.0
@@ -374,13 +374,6 @@ class DSSM_BLSTM_Model(object):
                              np.max(prediction2, axis = 1).reshape(-1,1)), axis = 1)
                 total_err_count += abs((np.argmax(prediction, axis = 1) - answer)).sum()
 
-                if batch_count != 0 and batch_count % 10 == 0:
-                    speed = N_BATCH * 10.0 / (time.time() - start_time)
-                    start_time = time.time()
-
-                percetage = ((batch_count % test_threshold)+1) / test_threshold * 100
-                if percetage - prev_percetage >= 1:
-                    utils.progress_bar(percetage, speed)
                     
                 # peek on val set every 5000 instances(1000 batches)
                 if batch_count % test_threshold == 0:
