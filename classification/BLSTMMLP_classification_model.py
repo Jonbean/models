@@ -324,7 +324,7 @@ class DSSM_BLSTM_Model(object):
         N_TRAIN_INS = len(self.train_ending)
         best_val_accuracy = 0
         best_test_accuracy = 0
-        test_threshold = 5000.0/N_BATCH
+        test_threshold = 5000/N_BATCH
         prev_percetage = 0.0
         speed = 0.0
         batch_count = 0.0
