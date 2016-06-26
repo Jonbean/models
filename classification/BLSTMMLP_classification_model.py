@@ -14,7 +14,7 @@ import sys
 theano.config.optimizer = 'None'
 
 class DSSM_BLSTM_Model(object):
-    def __init__(self, blstmmlp_setting, classmlp1_setting, dropout_rate, batchsize, random_init_wemb):
+    def __init__(self, blstmmlp_setting, classmlp1_setting, dropout_rate, batchsize, wemb_size = None):
         # Initialize Theano Symbolic variable attributes
         self.story_input_variable = None
         self.story_mask = None
@@ -53,7 +53,12 @@ class DSSM_BLSTM_Model(object):
         self.classmlp1_setting = [int(elem) for elem in classmlp1_setting.split('x')]
         self.dropout_rate = float(dropout_rate)
         self.batchsize = int(batchsize)
-        self.random_init_wemb = random_init_wemb
+        self.wemb_size = 300
+        if wemb_size == None:
+            self.random_init_wemb = False
+        else:
+            self.random_init_wemb = True
+            self.wemb_size = int(wemb_size)
 
         self.train_story = None
         self.train_ending = None
@@ -201,8 +206,8 @@ class DSSM_BLSTM_Model(object):
         self.n_test = len(self.test_answer)
 
         if self.random_init_wemb:
-            wemb = np.random.rand(28820 ,wemb_size)
-            wemb = np.concatenate((np.zeros((1, wemb_size)), wemb), axis = 0)
+            wemb = np.random.rand(28820 ,self.wemb_size)
+            wemb = np.concatenate((np.zeros((1, self.wemb_size)), wemb), axis = 0)
             self.wemb = theano.shared(wemb).astype(theano.config.floatX)
         else:
             self.wemb = theano.shared(pickle.load(open(self.wemb_matrix_path))).astype(theano.config.floatX)
@@ -382,6 +387,7 @@ class DSSM_BLSTM_Model(object):
                 prediction = np.concatenate((np.max(prediction1, axis = 1).reshape(-1,1), 
                              np.max(prediction2, axis = 1).reshape(-1,1)), axis = 1)
                 total_err_count += abs((np.argmax(prediction, axis = 1) - answer)).sum()
+
                 if batch_count != 0 and batch_count % 10 == 0:
                     speed = N_BATCH * 10.0 / (time.time() - start_time)
                     start_time = time.time()
@@ -389,6 +395,7 @@ class DSSM_BLSTM_Model(object):
                 percetage = ((batch_count % test_threshold)+1) / test_threshold * 100
                 if percetage - prev_percetage >= 1:
                     utils.progress_bar(percetage, speed)
+                    
                 # peek on val set every 5000 instances(1000 batches)
                 if batch_count % test_threshold == 0:
                     if batch_count == 0:
@@ -434,10 +441,10 @@ class DSSM_BLSTM_Model(object):
         print "accuracy is: ", test_result * 100, "%"
 
 def main(argv):
-    random_init_wemb = False
+    wemb_size = None
     if len(argv) > 4:
-        random_init_wemb = argv[4]
-    model = DSSM_BLSTM_Model(argv[0], argv[1], argv[2], argv[3], random_init_wemb)
+        wemb_size = argv[4]
+    model = DSSM_BLSTM_Model(argv[0], argv[1], argv[2], argv[3], wemb_size)
 
     print "loading data"
     model.load_data()

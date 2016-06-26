@@ -16,7 +16,7 @@ class MlpClassifier(object):
                                             nonlinearity=lasagne.nonlinearities.tanh,
                                             W=lasagne.init.GlorotUniform())
         if len(MLP_UNITS) > 1:      
-            l_hid2 = lasagne.layers.DenseLayer(l_hid1, num_units=MLP_layer2,
+            l_hid2 = lasagne.layers.DenseLayer(l_hid1, num_units=MLP_UNITS[1],
                                                 nonlinearity=lasagne.nonlinearities.tanh,
                                                 W=lasagne.init.GlorotUniform())
 
