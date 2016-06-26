@@ -1,0 +1,23 @@
+#!/bin/bash
+
+#$ -S /bin/bash
+#$ -M jontsai@uchicago.edu
+#$ -N blstmbi1
+#$ -m beasn
+#$ -r n
+#$ -o blstmbi1.out
+#$ -e blstmbi1.err
+#$ -cwd 
+
+SETTING1="500x400x300" 
+SETTING2="0.25" 
+SETTING3="30"
+SETTING4="500"
+
+export OMP_NUM_THREADS=2
+export OPENBLAS_NUM_THREADS=2
+echo "Start - `date`"
+/home-nfs/jontsai/anaconda/bin/python BLSTMMLP_Bilinear_classification_model.py \
+$SETTING1 $SETTING2 $SETTING3 $SETTING4
+echo "Finish - `date`"
+
