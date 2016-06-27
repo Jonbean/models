@@ -8,13 +8,12 @@ import utils
 import cPickle as pickle
 import collections
 import BLSTMMLP_Encoder
-import MLP_classifier
 import sys
 
 theano.config.optimizer = 'None'
 
 class DSSM_BLSTM_Model(object):
-    def __init__(self, blstmmlp_setting, classmlp1_setting, dropout_rate, batchsize, wemb_size = None):
+    def __init__(self, blstmmlp_setting, dropout_rate, batchsize, wemb_size = None):
         # Initialize Theano Symbolic variable attributes
         self.story_input_variable = None
         self.story_mask = None
@@ -43,14 +42,14 @@ class DSSM_BLSTM_Model(object):
         self.train_set_path = '../../data/pickles/train_index_corpus.pkl'
         self.val_set_path = '../../data/pickles/val_index_corpus.pkl'
         self.test_set_path = '../../data/pickles/test_index_corpus.pkl' 
-        self.best_val_model_save_path = './best_models_params/BLSTMLP_'+blstmmlp_setting+'_classmlp1_'+\
-                                        classmlp1_setting+'dropout'+dropout_rate+'_batch_'+batchsize+'_best_val.pkl'
-        self.best_test_model_save_path = './best_models_params/BLSTMLP_'+blstmmlp_setting+'_classmlp1_'+\
-                                        classmlp1_setting+'dropout'+dropout_rate+'_batch_'+batchsize+'_best_test.pkl'
+        self.blstmmlp_setting = blstmmlp_setting
+        self.best_val_model_save_path = './best_models_params/BLSTMLP_'+blstmmlp_setting+'_bilinear_'+\
+                                        'dropout'+dropout_rate+'_batch_'+batchsize+'_best_val.pkl'
+        self.best_test_model_save_path = './best_models_params/BLSTMLP_'+blstmmlp_setting+'_bilinear_'+\
+                                        'dropout'+dropout_rate+'_batch_'+batchsize+'_best_test.pkl'
         self.wemb_matrix_path = '../../data/pickles/index_wemb_matrix.pkl'
         self.blstm_units = int(blstmmlp_setting.split('x')[0])
         self.mlp_units = [int(elem) for elem in blstmmlp_setting.split('x')[1:]]
-        self.classmlp1_setting = [int(elem) for elem in classmlp1_setting.split('x')]
         self.dropout_rate = float(dropout_rate)
         self.batchsize = int(batchsize)
         self.wemb_size = 300
@@ -139,34 +138,21 @@ class DSSM_BLSTM_Model(object):
 
 
         # Construct symbolic cost function
-        target1 = T.matrix('gold_target', dtype= theano.config.floatX)
-        target2 = T.matrix('gold_target', dtype= theano.config.floatX)
+        target1 = T.vector('gold_target', dtype= theano.config.floatX)
+        target2 = T.vector('gold_target', dtype= theano.config.floatX)
 
-        self.classify_layer = MLP_classifier.MlpClassifier(self.mlp_units[-1], self.mlp_units[-1], self.classmlp1_setting)
-
-
-        sigmoid_end1_train = lasagne.layers.get_output(self.classify_layer.output,{self.classify_layer.story_in: self.story_encode_train,
-                                                         self.classify_layer.end_in: self.end1_encode_train},deterministic = False)
-
-        sigmoid_end1_test = lasagne.layers.get_output(self.classify_layer.output,{self.classify_layer.story_in: self.story_encode_test,
-                                                         self.classify_layer.end_in: self.end1_encode_test},deterministic = True)
-
-        sigmoid_end2_train = lasagne.layers.get_output(self.classify_layer.output,{self.classify_layer.story_in: self.story_encode_train,
-                                                         self.classify_layer.end_in: self.end2_encode_train},deterministic = False)
-
-        sigmoid_end2_test = lasagne.layers.get_output(self.classify_layer.output,{self.classify_layer.story_in: self.story_encode_test,
-                                                         self.classify_layer.end_in: self.end2_encode_test},deterministic = True)
+        self.Bilinear_W = theano.shared(np.random.rand(self.mlp_units[-1], self.mlp_units[-1]), name="bilinear_param")
 
 
-        cost1 = lasagne.objectives.categorical_crossentropy(sigmoid_end1_train, target1)
-        cost2 = lasagne.objectives.categorical_crossentropy(sigmoid_end2_train, target2)
+        prob1 = T.dot(T.dot(self.story_encode_test, self.Bilinear_W), self.end1_encode_test.T)
+        prob2 = T.dot(T.dot(self.story_encode_test, self.Bilinear_W), self.end2_encode_test.T)
+
+        cost1 = target1 * T.log(prob1) + (1 - target1) * T.log(1 - prob1)
+        cost2 = target2 * T.log(prob2) + (1 - target2) * T.log(1 - prob2)
         self.cost = (cost1 + cost2).sum()
-
-
-
         # Retrieve all parameters from the network
 
-        all_params = self.reason_layer.all_params + self.classify_layer.all_params
+        all_params = self.reason_layer.all_params + [self.Bilinear_W]
 
         
         all_updates = lasagne.updates.adam(self.cost, all_params)
@@ -181,7 +167,7 @@ class DSSM_BLSTM_Model(object):
         self.prediction = theano.function([self.story_input_variable, self.story_mask, 
                                      self.ending1_input_variable, self.ending1_mask,
                                      self.ending2_input_variable, self.ending2_mask],
-                                     [sigmoid_end1_test, sigmoid_end2_test])
+                                     [prob1, prob2])
 
 
     def load_data(self):
@@ -295,27 +281,27 @@ class DSSM_BLSTM_Model(object):
 
     def saving_model(self, val_or_test, accuracy):
         reason_params_value = lasagne.layers.get_all_param_values(self.reason_layer.output)
-        classif_params_value = lasagne.layers.get_all_param_values(self.classify_layer.output)
+        Bilinear_W = self.Bilinear_W.get_value()
 
         if val_or_test == 'val':
-            pickle.dump((reason_params_value, classif_params_value, accuracy), 
+            pickle.dump((reason_params_value, Bilinear_W, accuracy), 
                         open(self.best_val_model_save_path, 'wb'))
         else:
-            pickle.dump((reason_params_value, classif_params_value, accuracy), 
+            pickle.dump((reason_params_value, Bilinear_W, accuracy), 
                         open(self.best_test_model_save_path, 'wb'))            
 
     def reload_model(self, val_or_test):
         if val_or_test == 'val': 
 
-            reason_params, classif_params, accuracy = pickle.load(open(self.best_val_model_save_path))
+            reason_params, Bilinear_W, accuracy = pickle.load(open(self.best_val_model_save_path))
             lasagne.layers.set_all_param_values(self.reason_layer.output, reason_params)
-            lasagne.layers.set_all_param_values(self.classify_layer.output, classif_params)
+            self.Bilinear_W.set_value(Bilinear_W)
 
             print "This model has ", accuracy * 100, "%  accuracy on valid set" 
         else:
-            reason_params, classif_params, accuracy = pickle.load(open(self.best_test_model_save_path))
+            reason_params, Bilinear_W, accuracy = pickle.load(open(self.best_test_model_save_path))
             lasagne.layers.set_all_param_values(self.reason_layer.output, reason_params)
-            lasagne.layers.set_all_param_values(self.classify_layer.output, classif_params_value)
+            self.Bilinear_W.set_value(Bilinear_W)
             print "This model has ", accuracy * 100, "%  accuracy on test set" 
 
     def begin_train(self):
@@ -351,8 +337,8 @@ class DSSM_BLSTM_Model(object):
                 neg_end1 = [self.train_ending[index] for index in neg_end_index_list]
 
                 answer = np.random.randint(2, size = N_BATCH)
-                target1 = np.concatenate(((1 - answer).reshape(-1,1), answer.reshape(-1,1)), axis = 1)
-                target2 = 1 - target1
+                target1 = 1 - answer
+                target2 = answer
                 # answer_vec = np.concatenate(((1 - answer).reshape(-1,1), answer.reshape(-1,1)),axis = 1)
                 end1 = []
                 end2 = []
@@ -386,6 +372,7 @@ class DSSM_BLSTM_Model(object):
 
                 prediction = np.concatenate((np.max(prediction1, axis = 1).reshape(-1,1), 
                              np.max(prediction2, axis = 1).reshape(-1,1)), axis = 1)
+                total_err_count += abs((np.argmax(prediction, axis = 1) - answer)).sum()
 
                 '''master version print'''
                 if batch_count != 0 and batch_count % 10 == 0:
@@ -396,7 +383,7 @@ class DSSM_BLSTM_Model(object):
                 if percetage - prev_percetage >= 1:
                     utils.progress_bar(percetage, speed)
                 '''end of print'''
-
+                    
                 # peek on val set every 5000 instances(1000 batches)
                 if batch_count % test_threshold == 0:
                     if batch_count == 0:
@@ -410,7 +397,8 @@ class DSSM_BLSTM_Model(object):
                         print "new best! test on test set..."
                         best_val_accuracy = val_result
                         self.saving_model('val', best_val_accuracy)
-                        pickle.dump(val_result_list, open('./prediction/BLSTM_1neg_class_best_val_prediction.pkl','wb'))
+                        pickle.dump(val_result_list, open('./prediction/BLSTMLP_'+self.blstmmlp_setting+'_bilinear_'+\
+                                        'dropout'+str(self.dropout_rate)+'_batch_'+str(self.batchsize)+'_best_val.pkl','wb'))
 
                         test_accuracy, test_result_list = self.test_set_test()
                         print "test set accuracy: ", test_accuracy * 100, "%"
@@ -418,7 +406,8 @@ class DSSM_BLSTM_Model(object):
                             best_test_accuracy = test_accuracy
                             print "saving model..."
                             self.saving_model('test', best_test_accuracy)
-                            pickle.dump(test_result_list, open('./prediction/BLSTM_1neg_class_best_test_prediction.pkl','wb'))
+                            pickle.dump(test_result_list, open('./prediction/BLSTMLP_'+self.blstmmlp_setting+'_bilinear_'+\
+                                        'dropout'+str(self.dropout_rate)+'_batch_'+str(self.batchsize)+'_best_test.pkl','wb'))
 
                 batch_count += 1
             total_cost += cost
@@ -443,9 +432,9 @@ class DSSM_BLSTM_Model(object):
 
 def main(argv):
     wemb_size = None
-    if len(argv) > 4:
-        wemb_size = argv[4]
-    model = DSSM_BLSTM_Model(argv[0], argv[1], argv[2], argv[3], wemb_size)
+    if len(argv) > 3:
+        wemb_size = argv[3]
+    model = DSSM_BLSTM_Model(argv[0], argv[1], argv[2], wemb_size)
 
     print "loading data"
     model.load_data()
