@@ -314,6 +314,7 @@ class DSSM_BLSTM_Model(object):
         prev_percetage = 0.0
         speed = 0.0
         batch_count = 0.0
+        start_batch = 0.0
 
         for epoch in range(N_EPOCHS):
             print "epoch ", epoch,":"
@@ -375,12 +376,11 @@ class DSSM_BLSTM_Model(object):
                 total_err_count += abs((np.argmax(prediction, axis = 1) - answer)).sum()
 
                 '''master version print'''
-                if batch_count != 0 and batch_count % 10 == 0:
-                    speed = N_BATCH * 10.0 / (time.time() - start_time)
-                    start_time = time.time()
-
                 percetage = ((batch_count % test_threshold)+1) / test_threshold * 100
                 if percetage - prev_percetage >= 1:
+                    speed = N_BATCH * (batch_count - start_batch) / (time.time() - start_time)
+                    start_time = time.time()
+                    start_batch = batch_count
                     utils.progress_bar(percetage, speed)
                 '''end of print'''
                     
