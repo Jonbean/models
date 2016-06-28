@@ -43,10 +43,7 @@ class DSSM_BLSTM_Model(object):
         self.val_set_path = '../../data/pickles/val_index_corpus.pkl'
         self.test_set_path = '../../data/pickles/test_index_corpus.pkl' 
         self.blstmmlp_setting = blstmmlp_setting
-        self.best_val_model_save_path = './best_models_params/BLSTMLP_'+blstmmlp_setting+'_bilinear_'+\
-                                        'dropout'+dropout_rate+'_batch_'+batchsize+'_best_val.pkl'
-        self.best_test_model_save_path = './best_models_params/BLSTMLP_'+blstmmlp_setting+'_bilinear_'+\
-                                        'dropout'+dropout_rate+'_batch_'+batchsize+'_best_test.pkl'
+
         self.wemb_matrix_path = '../../data/pickles/index_wemb_matrix.pkl'
         self.blstm_units = int(blstmmlp_setting.split('x')[0])
         self.mlp_units = [int(elem) for elem in blstmmlp_setting.split('x')[1:]]
@@ -387,7 +384,6 @@ class DSSM_BLSTM_Model(object):
                     if val_result > best_val_accuracy:
                         print "new best! test on test set..."
                         best_val_accuracy = val_result
-                        self.saving_model('val', best_val_accuracy)
                         pickle.dump(val_result_list, open('./prediction/BLSTMLP_'+self.blstmmlp_setting+'_bilinear_'+\
                                         'dropout'+str(self.dropout_rate)+'_batch_'+str(self.batchsize)+'_best_val.pkl','wb'))
 
@@ -395,8 +391,6 @@ class DSSM_BLSTM_Model(object):
                         print "test set accuracy: ", test_accuracy * 100, "%"
                         if test_accuracy > best_test_accuracy:
                             best_test_accuracy = test_accuracy
-                            print "saving model..."
-                            self.saving_model('test', best_test_accuracy)
                             pickle.dump(test_result_list, open('./prediction/BLSTMLP_'+self.blstmmlp_setting+'_bilinear_'+\
                                         'dropout'+str(self.dropout_rate)+'_batch_'+str(self.batchsize)+'_best_test.pkl','wb'))
 

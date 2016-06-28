@@ -43,10 +43,7 @@ class DSSM_BLSTM_Model(object):
         self.train_set_path = '../../data/pickles/train_index_corpus.pkl'
         self.val_set_path = '../../data/pickles/val_index_corpus.pkl'
         self.test_set_path = '../../data/pickles/test_index_corpus.pkl' 
-        self.best_val_model_save_path = './best_models_params/BLSTMLP_'+blstmmlp_setting+'_classmlp1_'+\
-                                        classmlp1_setting+'dropout'+dropout_rate+'_batch_'+batchsize+'_best_val.pkl'
-        self.best_test_model_save_path = './best_models_params/BLSTMLP_'+blstmmlp_setting+'_classmlp1_'+\
-                                        classmlp1_setting+'dropout'+dropout_rate+'_batch_'+batchsize+'_best_test.pkl'
+
         self.wemb_matrix_path = '../../data/pickles/index_wemb_matrix.pkl'
         self.blstm_units = int(blstmmlp_setting.split('x')[0])
         self.mlp_units = [int(elem) for elem in blstmmlp_setting.split('x')[1:]]
@@ -400,7 +397,6 @@ class DSSM_BLSTM_Model(object):
                     if val_result > best_val_accuracy:
                         print "new best! test on test set..."
                         best_val_accuracy = val_result
-                        self.saving_model('val', best_val_accuracy)
                         pickle.dump(val_result_list, open('./prediction/BLSTM_1neg_class_best_val_prediction.pkl','wb'))
 
                         test_accuracy, test_result_list = self.test_set_test()
@@ -408,7 +404,6 @@ class DSSM_BLSTM_Model(object):
                         if test_accuracy > best_test_accuracy:
                             best_test_accuracy = test_accuracy
                             print "saving model..."
-                            self.saving_model('test', best_test_accuracy)
                             pickle.dump(test_result_list, open('./prediction/BLSTM_1neg_class_best_test_prediction.pkl','wb'))
 
                 batch_count += 1
