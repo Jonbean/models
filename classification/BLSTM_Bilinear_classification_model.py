@@ -10,7 +10,6 @@ import collections
 import BLSTMMLP_Encoder
 import sys
 
-theano.config.optimizer = 'None'
 
 class DSSM_BLSTM_Model(object):
     def __init__(self, blstmmlp_setting, dropout_rate, batchsize, wemb_size = None):

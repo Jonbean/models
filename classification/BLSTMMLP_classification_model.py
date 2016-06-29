@@ -11,7 +11,6 @@ import BLSTMMLP_Encoder
 import MLP_classifier
 import sys
 
-theano.config.optimizer = 'None'
 
 class DSSM_BLSTM_Model(object):
     def __init__(self, blstmmlp_setting, classmlp1_setting, dropout_rate, batchsize, wemb_size = None):
