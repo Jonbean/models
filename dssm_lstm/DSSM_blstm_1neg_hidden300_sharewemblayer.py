@@ -9,10 +9,22 @@ import cPickle as pickle
 import collections
 import BLSTM_Encoder
 import MLP_Encoder
+import sys
 
 class DSSM_BLSTM_Model(object):
-    def __init__(self):
+    def __init__(self,blstmmlp_setting, dropout_rate, batchsize, wemb_size = None):
         # Initialize Theano Symbolic variable attributes
+        self.blstm_units = int(blstmmlp_setting.split('x')[0])
+        self.mlp_units = [int(elem) for elem in blstmmlp_setting.split('x')[1:]]
+        self.dropout_rate = float(dropout_rate)
+        self.batchsize = int(batchsize)
+        self.wemb_size = 300
+        if wemb_size == None:
+            self.random_init_wemb = False
+        else:
+            self.random_init_wemb = True
+            self.wemb_size = int(wemb_size)
+
         self.story_input_variable = None
         self.story_mask = None
 
@@ -40,8 +52,6 @@ class DSSM_BLSTM_Model(object):
         self.train_set_path = '../../data/pickles/train_index_corpus.pkl'
         self.val_set_path = '../../data/pickles/val_index_corpus.pkl'
         self.test_set_path = '../../data/pickles/test_index_corpus.pkl' 
-        self.best_val_model_save_path = './best_models_params/BLSTM_neg1_300_sharewemb_best_val_model_params.pkl'
-        self.best_test_model_save_path = './best_models_params/BLSTM_neg1_300_sharewemb_best_test_model_params.pkl'
         self.wemb_matrix_path = '../../data/pickles/index_wemb_matrix.pkl'
 
         self.train_story = None
@@ -73,9 +83,6 @@ class DSSM_BLSTM_Model(object):
 
 
     def model_constructor(self, wemb_matrix_path = None):
-        if wemb_matrix_path != None:
-            self.wemb = theano.shared(pickle.load(open(wemb_matrix_path))).astype(theano.config.floatX)
-
 
         self.story_input_variable = T.matrix('story_input', dtype='int64')
         self.story_mask = T.matrix('story_mask', dtype=theano.config.floatX)
@@ -96,7 +103,7 @@ class DSSM_BLSTM_Model(object):
         neg_ending1_reshape_input = self.neg_ending1_input_variable.reshape([neg_ending1_batchsize, neg_ending1_seqlen,1])
 
 
-        self.wemb_layer = BLSTM_Encoder.BlstmEncoder(300)
+        self.wemb_layer = BLSTM_Encoder.BlstmEncoder(self.blstm_units)
 
         self.wemb_layer.build_model(self.wemb)
 
@@ -124,11 +131,11 @@ class DSSM_BLSTM_Model(object):
                                                         {self.wemb_layer.l_in:neg_ending1_reshape_input, 
                                                          self.wemb_layer.l_mask:self.neg_ending1_mask},deterministic = True)
 
-        self.story_reasonMLP = MLP_Encoder.MLPEncoder(500,300)
-        self.end_reasonMLP = MLP_Encoder.MLPEncoder(500,300)
+        self.story_reasonMLP = MLP_Encoder.MLPEncoder(self.mlp_units)
+        self.end_reasonMLP = MLP_Encoder.MLPEncoder(self.mlp_units)
 
-        self.story_reasonMLP.build_model(300)
-        self.end_reasonMLP.build_model(300)
+        self.story_reasonMLP.build_model(self.blstm_units)
+        self.end_reasonMLP.build_model(self.blstm_units)
 
         self.story_encode_train = lasagne.layers.get_output(self.story_reasonMLP.output,
                                                       {self.story_reasonMLP.l_in:self.doc_encode_train}, deterministic = False)
@@ -204,8 +211,12 @@ class DSSM_BLSTM_Model(object):
         self.test_ending2 = test_set[2]
         self.test_answer = test_set[3]
         self.n_test = len(self.test_answer)
-
-        self.wemb = theano.shared(pickle.load(open(self.wemb_matrix_path))).astype(theano.config.floatX)
+        if self.random_init_wemb:
+            wemb = np.random.rand(28820 ,self.wemb_size)
+            wemb = np.concatenate((np.zeros((1, self.wemb_size)), wemb), axis = 0)
+            self.wemb = theano.shared(wemb).astype(theano.config.floatX)
+        else:
+            self.wemb = theano.shared(pickle.load(open(self.wemb_matrix_path))).astype(theano.config.floatX)
 
     def fake_load_data(self):
         self.train_story = np.random.randint(1000, size = (1000, 20)).astype('int64')
@@ -287,40 +298,38 @@ class DSSM_BLSTM_Model(object):
 
 
     def saving_model(self, val_or_test, accuracy):
-        wemb_all_params_value = lasagne.layers.get_all_param_values(self.wemb_layer.output)
-        doc_all_params_value = lasagne.layers.get_all_param_values(self.story_reasonMLP.output)
-        query_all_params_value = lasagne.layers.get_all_param_values(self.end_reasonMLP.output)
+        all_params_value = lasagne.layers.get_all_param_values(self.reason_layer.output)
+
         if val_or_test == 'val':
-            pickle.dump((wemb_all_params_value, doc_all_params_value, query_all_params_value, accuracy), open(self.best_val_model_save_path, 'wb'))
+            pickle.dump((all_params_value, accuracy), open(self.best_val_model_save_path, 'wb'))
+            pickle.dump(self.wemb.get_value(), open(self.best_val_wemb_save_path, 'wb'))
         else:
-            pickle.dump((wemb_all_params_value, doc_all_params_value, query_all_params_value, accuracy), open(self.best_test_model_save_path, 'wb'))
+            pickle.dump((all_params_value, accuracy), open(self.best_test_model_save_path, 'wb'))            
+            pickle.dump(self.wemb.get_value(), open(self.best_test_wemb_save_path, 'wb'))
 
     def reload_model(self, val_or_test):
         if val_or_test == 'val': 
 
-            wemb_all_params, doc_all_params, query_all_params, accuracy = pickle.load(open(self.best_val_model_save_path))
-            lasagne.layers.set_all_param_values(self.wemb_layer.output, wemb_all_params)
-            lasagne.layers.set_all_param_values(self.story_reasonMLP.output, doc_all_params)
-            lasagne.layers.set_all_param_values(self.end_reasonMLP.output, query_all_params)
+            all_params, accuracy = pickle.load(open(self.best_val_model_save_path))
+            lasagne.layers.set_all_param_values(self.reason_layer.output, all_params)
+            self.wemb.set_value(pickle.load(open(self.best_val_wemb_save_path)))
             print "This model has ", accuracy * 100, "%  accuracy on valid set" 
         else:
-            wemb_all_params, doc_all_params, query_all_params, accuracy = pickle.load(open(self.best_test_model_save_path))
-            lasagne.layers.set_all_param_values(self.wemb_layer.output, wemb_all_params)
-            lasagne.layers.set_all_param_values(self.story_reasonMLP.output, doc_all_params)
-            lasagne.layers.set_all_param_values(self.end_reasonMLP.output, query_all_params) 
+            all_params,accuracy = pickle.load(open(self.best_test_model_save_path))
+            lasagne.layers.set_all_param_values(self.reason_layer.output, all_params)
+            self.wemb.set_value(pickle.load(open(self.best_test_wemb_save_path)))
             print "This model has ", accuracy * 100, "%  accuracy on test set" 
 
     def begin_train(self):
         N_EPOCHS = 30
-        N_BATCH = 20
+        N_BATCH = self.batchsize
         N_TRAIN_INS = len(self.train_ending)
         best_val_accuracy = 0
         best_test_accuracy = 0
-        test_threshold = 1000.0
+        test_threshold = 5000/N_BATCH
         prev_percetage = 0.0
         speed = 0.0
         batch_count = 0.0
-
 
         for epoch in range(N_EPOCHS):
             print "epoch ", epoch,":"
@@ -331,6 +340,8 @@ class DSSM_BLSTM_Model(object):
             start_time = time.time()
 
             total_cost = 0.0
+            total_err_count = 0.0
+
             for batch in range(max_batch):
                 batch_index_list = [shuffled_index_list[i] for i in range(batch * N_BATCH, (batch+1) * N_BATCH)]
                 train_story = [self.train_story[index] for index in batch_index_list]
@@ -353,7 +364,6 @@ class DSSM_BLSTM_Model(object):
                                         train_ending_matrix, train_ending_mask,
                                         neg_ending1_matrix, neg_ending1_mask)
 
-
                 # peek on val set every 5000 instances(1000 batches)
                 if batch_count % test_threshold == 0:
                     if batch_count == 0:
@@ -366,36 +376,34 @@ class DSSM_BLSTM_Model(object):
                     if val_result > best_val_accuracy:
                         print "new best! test on test set..."
                         best_val_accuracy = val_result
-                        self.saving_model('val', best_val_accuracy)
-                        pickle.dump(val_result_list, open('./prediction/BLSTM_1neg_sharewemb_best_val_prediction.pkl','wb'))
+                        if best_val_accuracy > 0.6:
+                            pickle.dump(val_result_list, open('./prediction/BLSTM_1neg_shareall_best_val_prediction.pkl','wb'))
 
                         test_accuracy, test_result_list = self.test_set_test()
                         print "test set accuracy: ", test_accuracy * 100, "%"
                         if test_accuracy > best_test_accuracy:
                             best_test_accuracy = test_accuracy
-                            print "saving model..."
-                            self.saving_model('test', best_test_accuracy)
-                            pickle.dump(test_result_list, open('./prediction/BLSTM_1neg_sharewemb_best_test_prediction.pkl','wb'))
+                            if best_test_accuracy > 0.6:
+                                pickle.dump(test_result_list, open('./prediction/BLSTM_1neg_shareall_best_test_prediction.pkl','wb'))
 
                 batch_count += 1
-
+                total_cost += cost
+                
             speed = max_batch * N_BATCH / (time.time() - start_time)
+            print "======================================="
+            print "epoch summary:"
             print "average speed: ", speed, "instances/sec"
-
-            total_cost += cost
             print ""
             print "total cost in this epoch: ", total_cost
+            print "======================================="
 
 
-        print "reload best model for testing on test set"
-        self.reload_model('val')
 
-        print "test on test set..."
-        test_result = self.test_set_test()
-        print "accuracy is: ", test_result * 100, "%"
-
-def main():
-    model = DSSM_BLSTM_Model()
+def main(argv):
+    wemb_size = None
+    if len(argv) > 3:
+        wemb_size = argv[3]
+    model = DSSM_BLSTM_Model(argv[0], argv[1], argv[2], wemb_size)
 
     print "loading data"
     model.load_data()
@@ -408,5 +416,4 @@ def main():
     model.begin_train()
     
 if __name__ == '__main__':
-    main()
-
+    main(sys.argv[1:])
