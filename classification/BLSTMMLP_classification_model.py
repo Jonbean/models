@@ -389,7 +389,7 @@ class DSSM_BLSTM_Model(object):
                     if batch_count == 0:
                         print "initial test"
                     else:
-                        print" "
+                        print " "
                     print"test on valid set..."
                     val_result, val_result_list = self.val_set_test()
                     print "accuracy is: ", val_result*100, "%"
