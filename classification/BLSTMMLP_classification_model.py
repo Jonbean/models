@@ -74,11 +74,11 @@ class DSSM_BLSTM_Model(object):
     def batch_cosine(self, doc_batch_proj, query_batch_proj):
         dot_prod = T.batched_dot(doc_batch_proj, query_batch_proj)
 
-        doc_square = doc_batch_proj ** 2
-        query_square = query_batch_proj ** 2
+        doc_square = T.sqr(doc_batch_proj)
+        query_square = T.sqr(query_batch_proj)
 
-        doc_norm = (T.sqrt(doc_square.sum(axis = 1))).sum()
-        query_norm = T.sqrt(query_square.sum(axis = 1)).sum()
+        doc_norm = T.sqrt(T.sum(doc_square, axis = 1))
+        query_norm = T.sqrt(T.sum(query_square, axis = 1))
 
         batch_cosine_vec = dot_prod/(doc_norm * query_norm)
         return batch_cosine_vec
@@ -135,8 +135,8 @@ class DSSM_BLSTM_Model(object):
 
 
         # Construct symbolic cost function
-        target1 = T.matrix('gold_target', dtype= theano.config.floatX)
-        target2 = T.matrix('gold_target', dtype= theano.config.floatX)
+        target1 = T.vector('gold_target1', dtype='int64')
+        target2 = T.vector('gold_target2', dtype='int64')
 
         self.classify_layer = MLP_classifier.MlpClassifier(self.mlp_units[-1], self.mlp_units[-1], self.classmlp1_setting)
 
@@ -156,7 +156,7 @@ class DSSM_BLSTM_Model(object):
 
         cost1 = lasagne.objectives.categorical_crossentropy(sigmoid_end1_train, target1)
         cost2 = lasagne.objectives.categorical_crossentropy(sigmoid_end2_train, target2)
-        self.cost = (cost1 + cost2).sum()
+        self.cost = lasagne.objectives.aggregate(cost1+cost2, mode="mean")
 
 
 
@@ -164,8 +164,8 @@ class DSSM_BLSTM_Model(object):
 
         all_params = self.reason_layer.all_params + self.classify_layer.all_params
 
-        
-        all_updates = lasagne.updates.adam(self.cost, all_params)
+        all_updates = lasagne.updates.nesterov_momentum(self.cost, all_params, learning_rate=0.1, momentum=0.9)
+        # all_updates = lasagne.updates.adam(self.cost, all_params,learning_rate=0.01)
 
         self.train_func = theano.function([self.story_input_variable, self.story_mask, 
                                      self.ending1_input_variable, self.ending1_mask,
@@ -224,7 +224,6 @@ class DSSM_BLSTM_Model(object):
     def val_set_test(self):
 
         correct = 0.
-        result_list = np.zeros((self.n_val, 2))
 
         for i in range(self.n_val):
             story = np.asarray(self.val_story[i], dtype='int64').reshape((1,-1))
@@ -240,24 +239,27 @@ class DSSM_BLSTM_Model(object):
             
             # Answer denotes the index of the anwer
 
-            prediction1 = np.argmax(prediction1, axis = 1)
-            prediction2 = np.argmax(prediction2, axis = 1)
+            prediction_index = np.argmax(np.concatenate((prediction1, prediction2), axis = 1).reshape(-1,4), axis = 1)
             prediction = 0
-            if prediction2 > prediction1:
+
+            if prediction_index == 0:
                 prediction = 1
+            elif prediction_index == 1:
+                prediction = 0
+            elif prediction_index == 2:
+                prediction = 0
+            else:
+                prediction = 1
+
             if prediction == self.val_answer[i]:
                 correct += 1.
 
-            result_list[i][0] = prediction1
-            result_list[i][1] = prediction2
 
-
-        return correct/self.n_val, result_list
+        return correct/self.n_val
 
     def test_set_test(self):
         #load test set data
         correct = 0.
-        result_list = np.zeros((self.n_test, 2))
 
         for i in range(self.n_test):
             story = np.asarray(self.test_story[i], dtype='int64').reshape((1,-1))
@@ -272,21 +274,23 @@ class DSSM_BLSTM_Model(object):
             prediction1, prediction2 = self.prediction(story, story_mask, ending1, ending1_mask, ending2, ending2_mask)
             
             # Answer denotes the index of the anwer
-            prediction1 = np.argmax(prediction1, axis = 1)
-            prediction2 = np.argmax(prediction2, axis = 1)
-            # Answer denotes the index of the anwer
-            prediction = 0
-            if prediction2 > prediction1:
-                prediction = 1
-            # Answer denotes the index of the anwer
 
-            if prediction == self.test_answer[i]:
+            prediction_index = np.argmax(np.concatenate((prediction1, prediction2), axis = 1).reshape(-1,4), axis = 1)
+            prediction = 0
+
+            if prediction_index == 0:
+                prediction = 1
+            elif prediction_index == 1:
+                prediction = 0
+            elif prediction_index == 2:
+                prediction = 0
+            else:
+                prediction = 1
+            
+            if prediction == self.val_answer[i]:
                 correct += 1.
 
-            result_list[i][0] = prediction1
-            result_list[i][1] = prediction2
-
-        return correct/self.n_test, result_list
+        return correct/self.n_test
 
 
     def saving_model(self, val_or_test, accuracy):
@@ -335,6 +339,7 @@ class DSSM_BLSTM_Model(object):
 
             total_cost = 0.0
             total_err_count = 0.0
+            train_accu = 0.0
 
             for batch in range(max_batch):
                 batch_index_list = [shuffled_index_list[i] for i in range(batch * N_BATCH, (batch+1) * N_BATCH)]
@@ -347,8 +352,8 @@ class DSSM_BLSTM_Model(object):
                 neg_end1 = [self.train_ending[index] for index in neg_end_index_list]
 
                 answer = np.random.randint(2, size = N_BATCH)
-                target1 = np.concatenate(((1 - answer).reshape(-1,1), answer.reshape(-1,1)), axis = 1)
-                target2 = 1 - target1
+                target1 = answer
+                target2 = 1 - answer
                 # answer_vec = np.concatenate(((1 - answer).reshape(-1,1), answer.reshape(-1,1)),axis = 1)
                 end1 = []
                 end2 = []
@@ -380,9 +385,18 @@ class DSSM_BLSTM_Model(object):
                                              train_end1_matrix, train_end1_mask,
                                              train_end2_matrix, train_end2_mask)
 
-                prediction = np.concatenate((np.max(prediction1, axis = 1).reshape(-1,1), 
-                             np.max(prediction2, axis = 1).reshape(-1,1)), axis = 1)
-                total_err_count += abs((np.argmax(prediction, axis = 1) - answer)).sum()
+                prediction_index = np.argmax(np.concatenate((prediction1, prediction2), axis = 1).reshape(-1,4), axis = 1)
+                prediction = np.zeros(N_BATCH)
+                for i in range(N_BATCH):
+                    if prediction_index[i] == 0:
+                        prediction[i] = 1
+                    elif prediction_index[i] == 1:
+                        prediction[i] = 0
+                    elif prediction_index[i] == 2:
+                        prediction[i] = 0
+                    else:
+                        prediction[i] = 1
+                total_err_count += abs(prediction - answer).sum()
 
                 # peek on val set every 5000 instances(1000 batches)
                 if batch_count % test_threshold == 0:
@@ -390,20 +404,19 @@ class DSSM_BLSTM_Model(object):
                         print "initial test"
                     else:
                         print " "
-                    print"test on valid set..."
-                    val_result, val_result_list = self.val_set_test()
-                    print "accuracy is: ", val_result*100, "%"
-                    if val_result > best_val_accuracy:
-                        print "new best! test on test set..."
-                        best_val_accuracy = val_result
-                        pickle.dump(val_result_list, open('./prediction/BLSTM_1neg_class_best_val_prediction.pkl','wb'))
+                        train_accu = 1 - (total_err_count /(batch * N_BATCH))
+                        print "accuracy on trainning set:", train_accu * 100,"%"
+                        print"test on valid set..."
+                        val_result = self.val_set_test()
+                        print "accuracy is: ", val_result*100, "%"
+                        if val_result > best_val_accuracy:
+                            print "new best! test on test set..."
+                            best_val_accuracy = val_result
 
-                        test_accuracy, test_result_list = self.test_set_test()
-                        print "test set accuracy: ", test_accuracy * 100, "%"
-                        if test_accuracy > best_test_accuracy:
-                            best_test_accuracy = test_accuracy
-                            print "saving model..."
-                            pickle.dump(test_result_list, open('./prediction/BLSTM_1neg_class_best_test_prediction.pkl','wb'))
+                            test_accuracy = self.test_set_test()
+                            print "test set accuracy: ", test_accuracy * 100, "%"
+                            if test_accuracy > best_test_accuracy:
+                                best_test_accuracy = test_accuracy
 
                 batch_count += 1
             total_cost += cost
