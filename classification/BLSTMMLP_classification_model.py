@@ -75,11 +75,11 @@ class DSSM_BLSTM_Model(object):
     def batch_cosine(self, doc_batch_proj, query_batch_proj):
         dot_prod = T.batched_dot(doc_batch_proj, query_batch_proj)
 
-        doc_square = doc_batch_proj ** 2
-        query_square = query_batch_proj ** 2
+        doc_square = T.sqr(doc_batch_proj)
+        query_square = T.sqr(query_batch_proj)
 
-        doc_norm = (T.sqrt(doc_square.sum(axis = 1))).sum()
-        query_norm = T.sqrt(query_square.sum(axis = 1)).sum()
+        doc_norm = (T.sqrt(T.sum(doc_square, axis=1)))
+        query_norm = T.sqrt(T.sum(query_square, axis=1))
 
         batch_cosine_vec = dot_prod/(doc_norm * query_norm)
         return batch_cosine_vec

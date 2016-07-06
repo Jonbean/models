@@ -133,15 +133,10 @@ class DSSM_MLP_Model(object):
                                      self.neg_ending1_input_variable,],
                                      self.cost, updates = all_updates)
 
-        # Compute adam updates for training
-        self.train_cost = theano.function([self.story_input_variable,
-                                     self.ending_input_variable,
-                                     self.neg_ending1_input_variable,],
-                                     self.cost)
 
         self.compute_cost = theano.function([self.story_input_variable,
                                      self.ending_input_variable, self.neg_ending1_input_variable],
-                                     [self.val_test_cos1, self.val_test_cos2])
+                                     [self.cost, self.val_test_cos1, self.val_test_cos2])
 
 
     def load_data(self):
@@ -191,7 +186,7 @@ class DSSM_MLP_Model(object):
 
             ending2 = self.trigram_feature_generator(self.val_ending2[i]).reshape((1,-1)).astype(theano.config.floatX)
 
-            pred1, pred2 = self.compute_cost(story, ending1, ending2)
+            cost, pred1, pred2 = self.compute_cost(story, ending1, ending2)
 
             # Answer denotes the index of the anwer
             predict_answer = 1
@@ -216,7 +211,7 @@ class DSSM_MLP_Model(object):
 
             ending2 = self.trigram_feature_generator(self.test_ending2[i]).reshape((1,-1)).astype(theano.config.floatX)
 
-            pred1, pred2 = self.compute_cost(story, ending1, ending2)
+            cost, pred1, pred2 = self.compute_cost(story, ending1, ending2)
 
             # Answer denotes the index of the anwer
             predict_answer = 1
@@ -286,6 +281,7 @@ class DSSM_MLP_Model(object):
             start_time = time.time()
 
             total_cost = 0.0
+            total_err = 0.0
 
             for batch in range(max_batch):
                 batch_index_list = [shuffled_index_list[i] for i in range(batch * N_BATCH, (batch+1) * N_BATCH)]
@@ -316,15 +312,22 @@ class DSSM_MLP_Model(object):
                 self.train_func(train_story_feature,
                                 train_ending_feature, 
                                 neg_end1_feature)
-                total_cost += self.train_cost(train_story_feature,
-                                train_ending_feature, 
-                                neg_end1_feature)
+                cost, pred1, pred2 = self.compute_cost(train_story_feature,
+                                                       train_ending_feature, 
+                                                       neg_end1_feature)
+                total_cost += cost
+                prediction = np.zeros(N_BATCH)
+                for i in range(N_BATCH):
+                    if pred1[i] < pred2[i]:
+                        prediction[i] = 1
+                total_err += prediction.sum()
 
                 if batch_count % test_threshold == 0:
                     if batch_count == 0:
                         print "initial test"
                     else:
                         print" "
+                        print "training set accuracy: ", (1-(total_err/(batch*N_BATCH)))*100,"%"
                     print"test on valid set..."
                     val_result = self.val_set_test()
                     print "accuracy is: ", val_result*100, "%"
