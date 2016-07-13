@@ -237,7 +237,7 @@ class Neural_Reasoner_Model(object):
         cost1 = lasagne.objectives.categorical_crossentropy(prob1, target1)
         cost2 = lasagne.objectives.categorical_crossentropy(prob2, target2)
 
-        self.cost = lasagne.objectives.aggregate(cost1+cost2, mode='mean')
+        self.cost = lasagne.objectives.aggregate(cost1+cost2, mode='sum')
 
 
         # Retrieve all parameters from the network
@@ -516,7 +516,7 @@ class Neural_Reasoner_Model(object):
 
 
 
-            total_cost += cost
+                total_cost += cost
 
             total_accuracy = 1.0 - (total_err_count/((max_batch)*N_BATCH))
             speed = max_batch * N_BATCH / (time.time() - start_time)
