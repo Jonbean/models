@@ -1,0 +1,24 @@
+#!/bin/bash
+
+#$ -S /bin/bash
+#$ -M jontsai@uchicago.edu
+#$ -N neu_reas2_val
+#$ -m beasn
+#$ -r n
+#$ -o neu_reas2_val.out
+#$ -e neu_reas2_val.err
+#$ -cwd 
+
+SETTING1="512" 
+SETTING2="256x512"
+SETTING3="0.0" 
+SETTING4="50"
+SETTING5="3"
+
+export OMP_NUM_THREADS=2
+export OPENBLAS_NUM_THREADS=2
+echo "Start - `date`"
+/home-nfs/jontsai/anaconda/bin/python GRUencoder_MLPreasoner_val.py \
+$SETTING1 $SETTING2 $SETTING3 $SETTING4 $SETTING5
+echo "Finish - `date`"
+
