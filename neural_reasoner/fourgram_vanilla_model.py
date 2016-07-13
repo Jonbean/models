@@ -73,8 +73,8 @@ class DSSM_MLP_Model(object):
         self.story_sent3_input_variable = T.matrix('story3_input', dtype=theano.config.floatX)
         self.story_sent4_input_variable = T.matrix('story4_input', dtype=theano.config.floatX)
 
-        self.end1_input_variable = T.matrix('ending_input', dtype = theano.config.floatX)
-        self.end2_input_variable = T.matrix('neg_ending1_input', dtype = theano.config.floatX)
+        self.end1_input_variable = T.matrix('end1_input', dtype = theano.config.floatX)
+        self.end2_input_variable = T.matrix('end2_input', dtype = theano.config.floatX)
 
 
 
@@ -142,7 +142,7 @@ class DSSM_MLP_Model(object):
         targets2 = T.vector(name='target2', dtype='int64')
         cost1 = lasagne.objectives.categorical_crossentropy(prob_vec1, targets1)
         cost2 = lasagne.objectives.categorical_crossentropy(prob_vec2, targets2)
-        self.cost = lasagne.objectives.aggregate(cost1 + cost2)
+        self.cost = lasagne.objectives.aggregate(cost1 + cost2, mode='sum')
         self.val_test_prob1 = prob_vec1
         self.val_test_prob2 = prob_vec2
         # Retrieve all parameters from the network
@@ -176,7 +176,7 @@ class DSSM_MLP_Model(object):
         self.val_story = train_set[0]
         self.val_ending1 = val_set[1]
         self.val_ending2 = val_set[2]
-        self.val_answer = val_set[3]
+        self.val_answer = np.asarray(val_set[3]) - 1
 
         self.n_val = len(self.val_answer)
 
@@ -184,7 +184,7 @@ class DSSM_MLP_Model(object):
         self.test_story = test_set[0]
         self.test_ending1 = test_set[1]
         self.test_ending2 = test_set[2]
-        self.test_answer = test_set[3]
+        self.test_answer = np.asarray(test_set[3]) - 1
         self.n_test = len(self.test_story)
         
         self.ngram_dict = pickle.load(open(self.ngram_dict_path))

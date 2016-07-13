@@ -25,10 +25,11 @@ class MLPEncoder(object):
 
         # l_in input shape ==> (n_batch, n_time_steps, n_features)
         # The number of feature dimensions is 1(index). 
-        self.l_in = lasagne.layers.InputLayer(shape=(None, input_dim))
+        self.story_in = lasagne.layers.InputLayer(shape=(None, input_dim))
+        self.end_in = lasagne.layers.InputLayer(shape=(None, input_dim))
+        l_concat = lasagne.layers.ConcatLayer([self.story_in, self.end_in], axis = 1)
 
-
-        l_hid1 = lasagne.layers.DenseLayer(self.l_in, num_units=self.layer1_units,
+        l_hid1 = lasagne.layers.DenseLayer(l_concat, num_units=self.layer1_units,
                                             nonlinearity=lasagne.nonlinearities.tanh,
                                             W=lasagne.init.GlorotUniform())
         
