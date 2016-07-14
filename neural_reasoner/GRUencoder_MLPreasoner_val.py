@@ -424,7 +424,7 @@ class Neural_Reasoner_Model(object):
             print "This model has ", accuracy * 100, "%  accuracy on test set" 
 
     def begin_train(self):
-        N_EPOCHS = 30
+        N_EPOCHS = 100
         N_BATCH = self.batchsize
         N_TRAIN_INS = len(self.val_answer)
         best_val_accuracy = 0
