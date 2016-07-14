@@ -246,8 +246,8 @@ class Neural_Reasoner_Model(object):
             reasoner_params += self.reasoners[i].all_params
         all_params = self.encoder.all_params + reasoner_params + final_class_param
 
-        # all_updates = lasagne.updates.adam(self.cost, all_params, learning_rate=0.1)
-        all_updates = lasagne.updates.momentum(self.cost, all_params, learning_rate = 0.1, momentum=0.9)
+        all_updates = lasagne.updates.adam(self.cost, all_params)
+        # all_updates = lasagne.updates.momentum(self.cost, all_params, learning_rate = 0.1, momentum=0.9)
 
         self.train_func = theano.function(self.inputs_variables + self.inputs_masks + [target1, target2], 
                                         [self.cost, score1, score2], updates = all_updates)
