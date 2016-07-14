@@ -487,17 +487,17 @@ class Neural_Reasoner_Model(object):
                 end1 = []
                 end2 = []
 
-                # for i in range(N_BATCH):
-                #     if answer[i] == 0:
-                #         end1.append(train_ending[i])
-                #         end2.append(neg_end1[i])
-                #     else:
-                #         end1.append(neg_end1[i])
-                #         end2.append(train_ending[i])
-
                 for i in range(N_BATCH):
-                    end1.append(train_ending[i])
-                    end2.append(neg_end1[i])
+                    if answer[i] == 0:
+                        end1.append(train_ending[i])
+                        end2.append(neg_end1[i])
+                    else:
+                        end1.append(neg_end1[i])
+                        end2.append(train_ending[i])
+
+                # for i in range(N_BATCH):
+                #     end1.append(train_ending[i])
+                #     end2.append(neg_end1[i])
 
                 train_story_matrices = [utils.padding(batch_sent) for batch_sent in train_story]
                 train_end1_matrix = utils.padding(end1)
