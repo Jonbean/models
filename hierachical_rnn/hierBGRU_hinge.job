@@ -1,0 +1,22 @@
+#!/bin/bash
+
+#$ -S /bin/bash
+#$ -M jontsai@uchicago.edu
+#$ -N hierBGRU_hinge
+#$ -m beasn
+#$ -r n
+#$ -o hierBGRU_hinge.out
+#$ -e hierBGRU_hinge.err
+#$ -cwd 
+
+SETTING1="300" 
+SETTING2="0.0"
+SETTING3="100" 
+
+export OMP_NUM_THREADS=2
+export OPENBLAS_NUM_THREADS=2
+echo "Start - `date`"
+/home-nfs/jontsai/anaconda/bin/python BGRU2BGRU_hinge.py \
+$SETTING1 $SETTING2 $SETTING3
+echo "Finish - `date`"
+
