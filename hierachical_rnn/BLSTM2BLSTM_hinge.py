@@ -377,7 +377,20 @@ class Hierachi_RNN(object):
         speed = 0.0
         batch_count = 0.0
         start_batch = 0.0
-        
+
+        '''init test'''
+        print "initial test..."
+        val_result = self.val_set_test()
+        print "accuracy is: ", val_result*100, "%"
+        if val_result > best_val_accuracy:
+            best_val_accuracy = val_result
+
+        test_accuracy = self.test_set_test()
+        print "test set accuracy: ", test_accuracy * 100, "%"
+        if test_accuracy > best_test_accuracy:
+            best_test_accuracy = test_accuracy
+        '''end of init test'''
+
         for epoch in range(N_EPOCHS):
             print "epoch ", epoch,":"
             shuffled_index_list = utils.shuffle_index(N_TRAIN_INS)
