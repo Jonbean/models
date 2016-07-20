@@ -118,7 +118,8 @@ class Hierachi_RNN(object):
 
         self.merge_ls = [T.reshape(tensor, (tensor.shape[0], 1, tensor.shape[1])) for tensor in self.train_encodinglayer_vecs]
 
-        encode_merge = T.concatenate(self.merge_ls, axis = 1)
+        encode_merge = T.concatenate(self.merge_ls[:-1], axis = 1)
+
         l_in = lasagne.layers.InputLayer(shape=(None, None, self.rnn_units))
         gate_parameters = lasagne.layers.recurrent.Gate(W_in=lasagne.init.Orthogonal(), 
                                                         W_hid=lasagne.init.Orthogonal(),
@@ -154,7 +155,6 @@ class Hierachi_RNN(object):
 
 
         # Do sum up of bidirectional LSTM results
-        l_sum = lasagne.layers.ElemwiseSumLayer([l_lstm, l_lstm_back])
         l_out_right = lasagne.layers.SliceLayer(l_lstm, -1, 1)
         l_out_left = lasagne.layers.SliceLayer(l_lstm_back, -1, 1)
         l_sum = lasagne.layers.ElemwiseSumLayer([l_out_right, l_out_left])

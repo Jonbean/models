@@ -250,12 +250,12 @@ class Neural_Reasoner_Model(object):
         # all_updates = lasagne.updates.momentum(self.cost, all_params, learning_rate = 0.1, momentum=0.9)
 
         self.train_func = theano.function(self.inputs_variables + self.inputs_masks + [target1, target2], 
-                                        [self.cost, score1, score2], updates = all_updates)
+                                        [self.cost, prob1, prob2], updates = all_updates)
 
         # Compute adam updates for training
 
         self.prediction = theano.function(self.inputs_variables + self.inputs_masks + [target1, target2], 
-                                        [self.cost, score1, score2])
+                                        [self.cost, prob1, prob2])
         # pydotprint(self.train_func, './computational_graph.png')
 
     def load_data(self):
