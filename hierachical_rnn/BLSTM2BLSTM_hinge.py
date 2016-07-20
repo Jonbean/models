@@ -373,8 +373,6 @@ class Hierachi_RNN(object):
         best_val_accuracy = 0
         best_test_accuracy = 0
         test_threshold = 10000/N_BATCH
-        prev_percetage = 0.0
-        speed = 0.0
         batch_count = 0.0
         start_batch = 0.0
 
@@ -426,10 +424,27 @@ class Hierachi_RNN(object):
                 total_correct_count = np.count_nonzero((score1 - score2).clip(0.0))
 
                 total_cost += cost
+                if batch_count % test_threshold == 0 and batch_count != 0:
+                    print "accuracy on training set: ", total_correct_count/((batch+1) * N_BATCH)*100.0, "%"
 
+                    print "test on val set..."
+                    val_result = self.val_set_test()
+                    print "accuracy is: ", val_result*100, "%"
+                    if val_result > best_val_accuracy:
+                        print "new best! test on test set..."
+                        best_val_accuracy = val_result
+
+                        test_accuracy = self.test_set_test()
+                        print "test set accuracy: ", test_accuracy * 100, "%"
+                        if test_accuracy > best_test_accuracy:
+                            best_test_accuracy = test_accuracy
+
+                batch_count += 1
             print "======================================="
             print "epoch summary:"
             print "average cost in this epoch: ", total_cost
+            print "average speed: ", N_TRAIN_INS/(time.time() - start_time), "instances/s "
+
             val_result = self.val_set_test()
             print "accuracy is: ", val_result*100, "%"
             if val_result > best_val_accuracy:
