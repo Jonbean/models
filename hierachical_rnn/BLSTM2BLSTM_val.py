@@ -14,7 +14,7 @@ import sys
 
 
 class Hierachi_RNN(object):
-    def __init__(self, rnn_setting, dropout_rate, batchsize, wemb_size = None):
+    def __init__(self, rnn_setting, dropout_rate, batchsize, val_split_ratio, wemb_size = None):
         # Initialize Theano Symbolic variable attributes
         self.story_input_variable = None
         self.story_mask = None
