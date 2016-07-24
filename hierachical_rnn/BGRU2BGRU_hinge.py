@@ -173,8 +173,8 @@ class Hierachi_RNN(object):
 
         # cost1 = lasagne.objectives.binary_crossentropy(prob1, target1)
         # cost2 = lasagne.objectives.binary_crossentropy(prob2, target2)
-
-        self.cost = lasagne.objectives.aggregate(self.delta - self.score1 + max_score_vec, mode='sum') 
+        score_vec = T.clip(self.delta - self.score1 + max_score_vec, 0.0, float('inf'))
+        self.cost = lasagne.objectives.aggregate(score_vec, mode='sum') 
 
 
         # Retrieve all parameters from the network
@@ -210,7 +210,7 @@ class Hierachi_RNN(object):
 
         val_set = pickle.load(open(self.val_set_path))
 
-        self.val_story = train_set[0]
+        self.val_story = val_set[0]
         self.val_ending1 = val_set[1]
         self.val_ending2 = val_set[2]
         self.val_answer = val_set[3]
@@ -425,7 +425,7 @@ class Hierachi_RNN(object):
             print "average speed: ", N_TRAIN_INS/(time.time() - start_time), "instances/s "
 
             val_result = self.val_set_test()
-            print "accuracy is: ", val_result*100, "%"
+            print "valid set accuracy: ", val_result*100, "%"
             if val_result > best_val_accuracy:
                 print "new best! test on test set..."
                 best_val_accuracy = val_result

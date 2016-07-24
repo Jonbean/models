@@ -75,15 +75,15 @@ class BGRUEncoder(object):
 
         # Do sum up of bidirectional LSTM results
         
-
+        l_merge = lasagne.layers.ElemwiseSumLayer([l_grurnn, l_grurnn_back])
         #here we shuffle the dimension of the 3D output of matrix of l_lstm2 because
         #pooling layer's gonna collapse the trailling axes
-        # l_shuffle = lasagne.layers.DimshuffleLayer(l_grurnn, (0,2,1))
+        l_shuffle = lasagne.layers.DimshuffleLayer(l_merge, (0,2,1))
 
-        # l_pooling = lasagne.layers.GlobalPoolLayer(l_shuffle)
+        l_pooling = lasagne.layers.GlobalPoolLayer(l_shuffle)
 
-        # l_out = l_pooling
-        l_out = lasagne.layers.SliceLayer(l_grurnn, -1, 1)
+        l_out = l_pooling
+        # l_out = lasagne.layers.SliceLayer(l_grurnn, -1, 1)
         #we only record the output(shall we record each layer???)
         self.output = l_out
         self.all_params = lasagne.layers.get_all_params(l_out)

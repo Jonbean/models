@@ -6,7 +6,7 @@ import os
 import time
 import utils
 import cPickle as pickle
-import RNN_Encoder
+import BGRU_Encoder
 import sys
 # from theano.printing import pydotprint
 
@@ -14,43 +14,30 @@ import sys
 
 
 class Hierachi_RNN(object):
-    def __init__(self, rnn_setting, dropout_rate, batchsize, wemb_size = None):
+    def __init__(self, rnn_setting, dropout_rate, batchsize, val_split_ratio, wemb_size = None):
         # Initialize Theano Symbolic variable attributes
         self.story_input_variable = None
         self.story_mask = None
         self.story_nsent = 4
 
-        self.ending_input_variable = None
-        self.ending_mask = None
-
-        self.neg_ending1_input_variable = None
-        self.neg_ending1_mask = None
-
-        self.doc_encoder = None
-        self.query_encoder = None 
-
-        self.doc_encode = None 
-        self.pos_end_encode = None
-        self.neg_end_encode = None
-
-        self.cost_vec = None
         self.cost = None
 
         self.train_func = None
-        self.compute_cost = None
 
         # Initialize data loading attributes
         self.wemb = None
-        self.train_set_path = '../../data/pickles/train_index_corpus.pkl'
         self.val_set_path = '../../data/pickles/val_index_corpus.pkl'
         self.test_set_path = '../../data/pickles/test_index_corpus.pkl' 
 
         self.wemb_matrix_path = '../../data/pickles/index_wemb_matrix.pkl'
+
         self.rnn_units = int(rnn_setting)
         # self.mlp_units = [int(elem) for elem in mlp_setting.split('x')]
         self.dropout_rate = float(dropout_rate)
         self.batchsize = int(batchsize)
-        # self.reasoning_depth = int(reasoning_depth)
+
+        self.val_split_ratio = float(val_split_ratio)
+
         self.wemb_size = 300
         if wemb_size == None:
             self.random_init_wemb = False
@@ -108,7 +95,7 @@ class Hierachi_RNN(object):
             self.reshaped_inputs_variables.append(self.inputs_variables[i].reshape([batch_size, seqlen, 1]))
 
         #initialize neural network units
-        self.encoder = RNN_Encoder.RNNEncoder(LAYER_1_UNITS = self.rnn_units, dropout_rate = self.dropout_rate)
+        self.encoder = BGRU_Encoder.BGRUEncoder(LAYER_1_UNITS = self.rnn_units, dropout_rate = self.dropout_rate)
         self.encoder.build_model(self.wemb)
 
         #build encoding layer
@@ -116,19 +103,27 @@ class Hierachi_RNN(object):
 
         #build reasoning layers
 
-        self.merge_ls = [T.reshape(tensor, (tensor.shape[0], 1, tensor.shape[1])) for tensor in self.train_encodinglayer_vecs]
+        self.merge_ls = [T.reshape(tensor, (tensor.shape[0], 1, tensor.shape[1])) for tensor in self.train_encodinglayer_vecs[:-1]]
 
         encode_merge = T.concatenate(self.merge_ls, axis = 1)
         l_in = lasagne.layers.InputLayer(shape=(None, None, self.rnn_units))
-        l_reasoner = lasagne.layers.recurrent.GRULayer(l_in, num_units=self.rnn_units,  
-                                                    learn_init=True, 
-                                                    gradient_steps=-1, 
-                                                    precompute_input=True
-                                                    )
-        l_out = lasagne.layers.SliceLayer(l_reasoner, -1, 1)
 
-        reasoner_result = lasagne.layers.get_output(l_out, {l_in: encode_merge}, deterministic = True)
-        reasoner_params = lasagne.layers.get_all_params(l_out)
+        l_gru = lasagne.layers.recurrent.GRULayer(l_in, num_units=self.rnn_units, backwards=False,
+                                                    learn_init=True, 
+                                                    gradient_steps=-1,
+                                                    precompute_input=True)
+
+        l_gru_back = lasagne.layers.recurrent.GRULayer(l_in, num_units=self.rnn_units, backwards=True,
+                                                    learn_init=True, 
+                                                    gradient_steps=-1,
+                                                    precompute_input=True)
+
+        l_out_right = lasagne.layers.SliceLayer(l_gru, -1, 1)
+        l_out_left = lasagne.layers.SliceLayer(l_gru_back, -1, 1)
+        l_sum = lasagne.layers.ElemwiseSumLayer([l_out_right, l_out_left])
+
+        reasoner_result = lasagne.layers.get_output(l_sum, {l_in: encode_merge}, deterministic = True)
+        reasoner_params = lasagne.layers.get_all_params(l_sum)
 
         l_story_in = lasagne.layers.InputLayer(shape=(None, self.rnn_units))
         l_end_in = lasagne.layers.InputLayer(shape = (None, self.rnn_units))
@@ -172,18 +167,26 @@ class Hierachi_RNN(object):
         # pydotprint(self.train_func, './computational_graph.png')
 
     def load_data(self):
-        train_set = pickle.load(open(self.train_set_path))
-        self.train_story = train_set[0]
-        self.train_ending = train_set[1]
+        # train_set = pickle.load(open(self.train_set_path))
+        # self.train_story = train_set[0]
+        # self.train_ending = train_set[1]
 
         val_set = pickle.load(open(self.val_set_path))
 
-        self.val_story = train_set[0]
+        self.val_story = val_set[0]
         self.val_ending1 = val_set[1]
         self.val_ending2 = val_set[2]
         self.val_answer = val_set[3]
 
-        self.n_val = len(self.val_answer)
+        self.val_len = len(self.val_answer)
+        self.val_train_n = int(self.val_split_ratio * self.val_len)
+        self.val_test_n = self.val_len - self.val_train_n
+
+        shuffled_indices_ls = utils.shuffle_index(len(self.val_answer))
+
+        self.val_train_ls = shuffled_indices_ls[:self.val_train_n]
+        self.val_test_ls = shuffled_indices_ls[self.val_train_n:]
+
 
         test_set = pickle.load(open(self.test_set_path))
         self.test_story = test_set[0]
@@ -238,7 +241,7 @@ class Hierachi_RNN(object):
 
         correct = 0.
 
-        for i in range(self.n_val):
+        for i in self.val_test_ls:
             story = [np.asarray(sent, dtype='int64').reshape((1,-1)) for sent in self.val_story[i]]
             story_mask = [np.ones((1,len(self.val_story[i][j]))) for j in range(4)]
 
@@ -270,7 +273,7 @@ class Hierachi_RNN(object):
                 correct += 1.
 
 
-        return correct/self.n_val
+        return correct/self.val_test_n
 
     def test_set_test(self):
         #load test set data
@@ -339,19 +342,14 @@ class Hierachi_RNN(object):
     def begin_train(self):
         N_EPOCHS = 100
         N_BATCH = self.batchsize
-        N_TRAIN_INS = len(self.val_answer)
+        N_TRAIN_INS = self.val_train_n
         best_val_accuracy = 0
         best_test_accuracy = 0
-        test_threshold = 1000/N_BATCH
-        prev_percetage = 0.0
-        speed = 0.0
-        batch_count = 0.0
-        start_batch = 0.0
 
         """init test"""
         print "initial test"
         val_result = self.val_set_test()
-        print "accuracy is: ", val_result*100, "%"
+        print "valid set accuracy: ", val_result*100, "%"
         if val_result > best_val_accuracy:
             print "new best! test on test set..."
             best_val_accuracy = val_result
@@ -365,7 +363,8 @@ class Hierachi_RNN(object):
         
         for epoch in range(N_EPOCHS):
             print "epoch ", epoch,":"
-            shuffled_index_list = utils.shuffle_index(N_TRAIN_INS)
+            shuffled_index_list = self.val_train_ls
+            np.random.shuffle(shuffled_index_list)
 
             max_batch = N_TRAIN_INS/N_BATCH
 
@@ -444,7 +443,8 @@ class Hierachi_RNN(object):
 
             print "======================================="
             print "epoch summary:"
-            print "average cost in this epoch: ", total_cost
+            print "total cost in this epoch: ", total_cost
+            print "accuracy on training set: ", (1.0-(total_err_count / N_TRAIN_INS)) * 100, "%"
             val_result = self.val_set_test()
             print "accuracy is: ", val_result*100, "%"
             if val_result > best_val_accuracy:
