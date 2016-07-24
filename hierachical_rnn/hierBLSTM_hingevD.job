@@ -2,22 +2,21 @@
 
 #$ -S /bin/bash
 #$ -M jontsai@uchicago.edu
-#$ -N hier_GRU1_val
+#$ -N hierBLSTM_hingevD
 #$ -m beasn
 #$ -r n
-#$ -o hier_GRU1_val.out
-#$ -e hier_GRU1_val.err
+#$ -o hierBLSTM_hingevD.out
+#$ -e hierBLSTM_hingevD.err
 #$ -cwd 
 
 SETTING1="300" 
 SETTING2="0.0"
-SETTING3="50" 
-SETTING4="0.25"
+SETTING3="100" 
 
 export OMP_NUM_THREADS=2
 export OPENBLAS_NUM_THREADS=2
 echo "Start - `date`"
-/home-nfs/jontsai/anaconda/bin/python GRU2GRU_val.py \
-$SETTING1 $SETTING2 $SETTING3 $SETTING4
+/home-nfs/jontsai/anaconda/bin/python BLSTM2BLSTM_hingevDelta.py \
+$SETTING1 $SETTING2 $SETTING3
 echo "Finish - `date`"
 
