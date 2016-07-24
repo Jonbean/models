@@ -2,11 +2,11 @@
 
 #$ -S /bin/bash
 #$ -M jontsai@uchicago.edu
-#$ -N hierBLSTM_val
+#$ -N hierBLSTM_val1-4
 #$ -m beasn
 #$ -r n
-#$ -o hierBLSTM_val.out
-#$ -e hierBLSTM_val.err
+#$ -o hierBLSTM_val1-4.out
+#$ -e hierBLSTM_val1-4.err
 #$ -cwd 
 
 SETTING1="300" 
