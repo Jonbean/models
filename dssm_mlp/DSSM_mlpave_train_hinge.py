@@ -237,7 +237,6 @@ class DSSM_MLP_Model(object):
 
         minibatch_n = 50
         max_batch_n = self.n_val / minibatch_n
-        print type(max_batch_n), max_batch_n
         for i in range(max_batch_n):
 
             story_ls = [[self.val_story[index][j] for index in range(i*minibatch_n, (i+1)*minibatch_n)] for j in range(self.story_nsent)]
@@ -252,9 +251,6 @@ class DSSM_MLP_Model(object):
             ending2_ls = [self.val_ending2[index] for index in range(i*minibatch_n, (i+1)*minibatch_n)]
             ending2_matrix = utils.padding(ending2_ls)
             ending2_mask = utils.mask_generator(ending2_ls)
-            for i in range(4):
-                print story_matrix[i].shape, story_mask[i].shape
-            print ending1_matrix.shape, ending1_mask.shape, ending2_matrix.shape, ending2_mask.shape
 
             score1, score2 = self.compute_cost(story_matrix[0], story_matrix[1], story_matrix[2], story_matrix[3], 
                                                 story_mask[0], story_mask[1], story_mask[2], story_mask[3],
@@ -263,16 +259,12 @@ class DSSM_MLP_Model(object):
             # Answer denotes the index of the anwer
             prediction = np.argmax(np.concatenate((score1, score2), axis=1), axis=1)
             correct_vec = prediction - self.val_answer[i*minibatch_n:(i+1)*minibatch_n]
-            print correct_vec
             correct += minibatch_n - (abs(correct_vec)).sum()
-            print correct
 
         for k in range(minibatch_n * max_batch_n, self.n_val):
             story = [np.asarray(sent, dtype='int64').reshape((1,-1)) for sent in self.val_story[k]]
             story_mask = [np.ones((1,len(self.val_story[k][j]))) for j in range(4)]
 
-            print story[0].shape
-            print story_mask[0].shape
 
             ending1 = np.asarray(self.val_ending1[k], dtype='int64').reshape((1,-1))
             ending1_mask = np.ones((1,len(self.val_ending1[k])))
@@ -288,7 +280,6 @@ class DSSM_MLP_Model(object):
 
             if prediction == self.val_answer[k]:
                 correct += 1.    
-        print self.n_val
         return correct/self.n_val
 
     def test_set_test(self):
