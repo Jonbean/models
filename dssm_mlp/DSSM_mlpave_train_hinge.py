@@ -399,7 +399,7 @@ class DSSM_MLP_Model(object):
 
             for batch in range(max_batch):
                 batch_index_list = [shuffled_index_list[i] for i in range(batch * N_BATCH, (batch+1) * N_BATCH)]
-                train_story = [self.train_story[index] for index in batch_index_list]
+                train_story = [[self.train_story[index][j] for index in batch_index_list] for j in range(self.story_nsent)]
                 train_ending1 = [self.train_ending1[index] for index in batch_index_list]
                 
             
