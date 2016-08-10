@@ -380,11 +380,11 @@ class DSSM_MLP_Model(object):
             
                 neg_end = [self.train_ending1[index] for index in neg_end_index_matrix]
 
-                train_story_matrix = [utils.padding(train_story[i]) for i in range(1, self.story_nsent+1)]
+                train_story_matrix = [utils.padding(train_story[i]) for i in range(self.story_nsent)]
                 train_ending1_matrix = utils.padding(train_ending1)
                 neg_end_matrix = utils.padding(neg_end)
 
-                train_story_mask = [utils.mask_generator(train_story[i]) for i in range(1, self.story_nsent+1)]
+                train_story_mask = [utils.mask_generator(train_story[i]) for i in range(self.story_nsent)]
                 train_ending1_mask = utils.mask_generator(train_ending1)
                 neg_end_mask = utils.mask_generator(neg_end)
 
