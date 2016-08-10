@@ -147,12 +147,6 @@ class DSSM_MLP_Model(object):
             self.end1_score_vec = self.batch_cosine(story_vec, end1_vec).reshape([-1, 1])
             self.end2_score_vec = self.batch_cosine(story_vec, end2_vec).reshape([-1, 1])
 
-            self.scores = []
-            for i in range(self.batchsize - 1):
-                self.scores.append(self.batch_cosine(story_vec, T.roll(end1_vec, shift=(i+1), axis = 0)).reshape([-1, 1]))
-            score_matrix = T.concatenate(self.scores, axis = 1)
-            self.max_score_vec = T.max(score_matrix, axis = 1).reshape((-1, 1))
-
             self.all_params = self.encoder.all_params+embeding_params
 
         else:
@@ -161,24 +155,10 @@ class DSSM_MLP_Model(object):
             self.end1_score_vec = score_matrix.diagonal().reshape([-1, 1])
             self.end2_score_vec = T.dot(cache_result, T.transpose(end2_vec)).diagonal().reshape([-1, 1])
 
-            
-            
-            sort_score_indices = T.transpose(T.argsort(score_matrix, axis = 0))
-            best_score_indices = sort_score_indices[-1].astype('int64')
-            second_best_score_indices = sort_score_indices[-2].astype('int64')
-            check_indices = T.arange(self.batchsize).astype('int64')
-            best_mask = T.eq(best_score_indices, check_indices).astype('int64')
-            second_best_mask = T.ones_like(best_mask) - best_mask
-            hinge_indices = best_score_indices * second_best_mask + second_best_score_indices * best_mask
-            
-            hinge_score_ls = []
-            for i in range(self.batchsize):
-                hinge_score_ls.append(score_matrix[i][hinge_indices[i]].reshape((1,1)))
-            self.max_score_vec = T.concatenate(hinge_score_ls, axis = 1).reshape([-1, 1])
             self.all_params = self.encoder.all_params + embeding_params+[self.bilinear_weight]
 
+        loss = - self.end1_score_vec + self.end2_score_vec
 
-        loss = T.max(T.concatenate([T.zeros((self.batchsize, 1)), 2.0 - self.end1_score_vec + self.max_score_vec], axis = 1), axis = 1)
         self.cost = lasagne.objectives.aggregate(loss, mode='sum')
         # Retrieve all parameters from the network
 
@@ -191,8 +171,9 @@ class DSSM_MLP_Model(object):
             self.all_updates = lasagne.updates.adam(self.cost, self.all_params)
 
         self.train_func = theano.function(self.story_input_variable+self.story_mask+
-                                     [self.ending1_input_variable, self.ending1_mask],
-                                     [self.cost, self.end1_score_vec, self.max_score_vec], updates = self.all_updates)
+                                     [self.ending1_input_variable, self.ending1_mask,
+                                     self.ending2_input_variable, self.ending2_mask],
+                                     [self.cost, self.end1_score_vec, self.end2_score_vec], updates = self.all_updates)
 
         # Compute adam updates for training
 
@@ -393,17 +374,24 @@ class DSSM_MLP_Model(object):
                 train_story = [[self.train_story[index][j] for index in batch_index_list] for j in range(self.story_nsent)]
                 train_ending1 = [self.train_ending1[index] for index in batch_index_list]
                 
+                neg_end_index_matrix = np.random.randint(N_TRAIN_INS, size = (N_BATCH, ))
+                while np.any((np.asarray(batch_index_list) - neg_end_index_matrix) == 0):
+                    neg_end_index_matrix = np.random.randint(N_TRAIN_INS, size = (N_BATCH, ))
             
+                neg_end = [self.train_ending[index] for index in neg_end_index_matrix]
+
                 train_story_matrix = [utils.padding(train_story[i]) for i in range(self.story_nsent)]
                 train_ending1_matrix = utils.padding(train_ending1)
+                neg_end_matrix = utils.padding(neg_end)
 
                 train_story_mask = [utils.mask_generator(train_story[i]) for i in range(self.story_nsent)]
                 train_ending1_mask = utils.mask_generator(train_ending1)
+                neg_end_mask = utils.mask_generator(neg_end)
 
                 cost, cos1, cos2 = self.train_func(train_story_matrix[0],train_story_matrix[1], train_story_matrix[2],
                                                     train_story_matrix[3] , train_story_mask[0], train_story_mask[1],
                                                     train_story_mask[2], train_story_mask[3],train_ending1_matrix, 
-                                                    train_ending1_mask)
+                                                    train_ending1_mask, neg_end_matrix, neg_end_mask)
 
                 total_cost += cost
                 predict_vec = np.argmax(np.concatenate([cos1, cos2], axis = 1), axis = 1).reshape((-1, 1))
