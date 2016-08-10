@@ -235,35 +235,35 @@ class DSSM_MLP_Model(object):
     def val_set_test(self):
         correct = 0.
 
-        minibatch_n = 50
-        max_batch_n = self.n_val / minibatch_n
-        for i in range(max_batch_n):
+        # minibatch_n = 50
+        # max_batch_n = self.n_val / minibatch_n
+        # for i in range(max_batch_n):
 
-            story_ls = [[self.val_story[index][j] for index in range(i*minibatch_n, (i+1)*minibatch_n)] for j in range(self.story_nsent)]
-            story_matrix = [utils.padding(batch_sent) for batch_sent in story_ls]
-            story_mask = [utils.mask_generator(batch_sent) for batch_sent in story_ls]
+        #     story_ls = [[self.val_story[index][j] for index in range(i*minibatch_n, (i+1)*minibatch_n)] for j in range(self.story_nsent)]
+        #     story_matrix = [utils.padding(batch_sent) for batch_sent in story_ls]
+        #     story_mask = [utils.mask_generator(batch_sent) for batch_sent in story_ls]
 
-            ending1_ls = [self.val_ending1[index] for index in range(i*minibatch_n, (i+1)*minibatch_n)]
-            ending1_matrix = utils.padding(ending1_ls)
-            ending1_mask = utils.mask_generator(ending1_ls)
+        #     ending1_ls = [self.val_ending1[index] for index in range(i*minibatch_n, (i+1)*minibatch_n)]
+        #     ending1_matrix = utils.padding(ending1_ls)
+        #     ending1_mask = utils.mask_generator(ending1_ls)
 
 
-            ending2_ls = [self.val_ending2[index] for index in range(i*minibatch_n, (i+1)*minibatch_n)]
-            ending2_matrix = utils.padding(ending2_ls)
-            ending2_mask = utils.mask_generator(ending2_ls)
+        #     ending2_ls = [self.val_ending2[index] for index in range(i*minibatch_n, (i+1)*minibatch_n)]
+        #     ending2_matrix = utils.padding(ending2_ls)
+        #     ending2_mask = utils.mask_generator(ending2_ls)
 
-            score1, score2 = self.compute_cost(story_matrix[0], story_matrix[1], story_matrix[2], story_matrix[3], 
-                                                story_mask[0], story_mask[1], story_mask[2], story_mask[3],
-                                                ending1_matrix, ending1_mask, ending2_matrix, ending2_mask)
+        #     score1, score2 = self.compute_cost(story_matrix[0], story_matrix[1], story_matrix[2], story_matrix[3], 
+        #                                         story_mask[0], story_mask[1], story_mask[2], story_mask[3],
+        #                                         ending1_matrix, ending1_mask, ending2_matrix, ending2_mask)
 
-            # Answer denotes the index of the anwer
-            prediction = np.argmax(np.concatenate((score1, score2), axis=1), axis=1)
-            correct_vec = prediction - self.val_answer[i*minibatch_n:(i+1)*minibatch_n]
-            print correct_vec
-            correct += minibatch_n - (abs(correct_vec)).sum()
-            print correct
+        #     # Answer denotes the index of the anwer
+        #     prediction = np.argmax(np.concatenate((score1, score2), axis=1), axis=1)
+        #     correct_vec = prediction - self.val_answer[i*minibatch_n:(i+1)*minibatch_n]
+        #     print correct_vec
+        #     correct += minibatch_n - (abs(correct_vec)).sum()
+        #     print correct
 
-        for k in range(minibatch_n * max_batch_n, self.n_val):
+        for k in range(self.n_val):
             story = [np.asarray(sent, dtype='int64').reshape((1,-1)) for sent in self.val_story[k]]
             story_mask = [np.ones((1,len(self.val_story[k][j]))) for j in range(4)]
 
