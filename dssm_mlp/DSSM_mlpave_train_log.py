@@ -123,7 +123,7 @@ class DSSM_MLP_Model(object):
         embeding_params = lasagne.layers.get_all_params(l_reshape)
 
         story_ave_matrices = []
-        for i in range(self.story_nsent + 1):
+        for i in range(self.story_nsent):
             story_tensor = lasagne.layers.get_output(l_reshape, {l_in: self.story_reshape_input[i]})
             ave_matrix = (T.sum(story_tensor, axis = 1))/((T.sum(self.story_mask[i], axis = 1)).reshape([self.story_mask[i].shape[0],1]))
             story_ave_matrices.append(ave_matrix.reshape([1, ave_matrix.shape[0], ave_matrix.shape[1]]))
@@ -132,7 +132,7 @@ class DSSM_MLP_Model(object):
         end1_tensor = lasagne.layers.get_output(l_reshape, {l_in: ending1_reshape_input})
         end2_tensor = lasagne.layers.get_output(l_reshape, {l_in: ending2_reshape_input})
 
-        story_ave_matrix = T.sum(T.concatenate(story_ave_matrices, axis = 0), axis = 0) / 5.0
+        story_ave_matrix = T.sum(T.concatenate(story_ave_matrices, axis = 0), axis = 0) / 4.0
         end1_ave_matrix = (T.sum(end1_tensor, axis = 1))/((T.sum(self.ending1_mask, axis = 1)).reshape([self.ending1_mask.shape[0],1]))
         end2_ave_matrix = (T.sum(end2_tensor, axis = 1))/((T.sum(self.ending2_mask, axis = 1)).reshape([self.ending2_mask.shape[0],1]))
 
@@ -371,7 +371,7 @@ class DSSM_MLP_Model(object):
 
             for batch in range(max_batch):
                 batch_index_list = [shuffled_index_list[i] for i in range(batch * N_BATCH, (batch+1) * N_BATCH)]
-                train_story = [[self.train_story[index][j] for index in batch_index_list] for j in range(self.story_nsent)]
+                train_story = [[self.train_story[index][j] for index in batch_index_list] for j in range(1, self.story_nsent+1)]
                 train_ending1 = [self.train_ending1[index] for index in batch_index_list]
                 
                 neg_end_index_matrix = np.random.randint(N_TRAIN_INS, size = (N_BATCH, ))
@@ -380,11 +380,11 @@ class DSSM_MLP_Model(object):
             
                 neg_end = [self.train_ending1[index] for index in neg_end_index_matrix]
 
-                train_story_matrix = [utils.padding(train_story[i]) for i in range(self.story_nsent)]
+                train_story_matrix = [utils.padding(train_story[i]) for i in range(1, self.story_nsent+1)]
                 train_ending1_matrix = utils.padding(train_ending1)
                 neg_end_matrix = utils.padding(neg_end)
 
-                train_story_mask = [utils.mask_generator(train_story[i]) for i in range(self.story_nsent)]
+                train_story_mask = [utils.mask_generator(train_story[i]) for i in range(1, self.story_nsent+1)]
                 train_ending1_mask = utils.mask_generator(train_ending1)
                 neg_end_mask = utils.mask_generator(neg_end)
 
