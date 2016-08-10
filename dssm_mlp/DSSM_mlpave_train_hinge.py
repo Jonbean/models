@@ -156,7 +156,7 @@ class DSSM_MLP_Model(object):
             self.all_params = self.encoder.all_params+embeding_params
 
         else:
-            cache_result = T.dot(story_vec, bilinear_matrix)
+            cache_result = T.dot(story_vec, self.bilinear_weight)
             score_matrix = T.dot(cache_result, T.transpose(end1_vec))
             self.end1_score_vec = score_matrix.diagonal().reshape([-1, 1])
             self.end2_score_vec = T.dot(cache_result, T.transpose(end2_vec)).diagonal().reshape([-1, 1])
