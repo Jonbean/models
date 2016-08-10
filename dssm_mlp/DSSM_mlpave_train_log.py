@@ -378,7 +378,7 @@ class DSSM_MLP_Model(object):
                 while np.any((np.asarray(batch_index_list) - neg_end_index_matrix) == 0):
                     neg_end_index_matrix = np.random.randint(N_TRAIN_INS, size = (N_BATCH, ))
             
-                neg_end = [self.train_ending[index] for index in neg_end_index_matrix]
+                neg_end = [self.train_ending1[index] for index in neg_end_index_matrix]
 
                 train_story_matrix = [utils.padding(train_story[i]) for i in range(self.story_nsent)]
                 train_ending1_matrix = utils.padding(train_ending1)
