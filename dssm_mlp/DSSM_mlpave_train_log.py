@@ -123,7 +123,7 @@ class DSSM_MLP_Model(object):
         embeding_params = lasagne.layers.get_all_params(l_reshape)
 
         story_ave_matrices = []
-        for i in range(self.story_nsent):
+        for i in range(self.story_nsent + 1):
             story_tensor = lasagne.layers.get_output(l_reshape, {l_in: self.story_reshape_input[i]})
             ave_matrix = (T.sum(story_tensor, axis = 1))/((T.sum(self.story_mask[i], axis = 1)).reshape([self.story_mask[i].shape[0],1]))
             story_ave_matrices.append(ave_matrix.reshape([1, ave_matrix.shape[0], ave_matrix.shape[1]]))
@@ -132,7 +132,7 @@ class DSSM_MLP_Model(object):
         end1_tensor = lasagne.layers.get_output(l_reshape, {l_in: ending1_reshape_input})
         end2_tensor = lasagne.layers.get_output(l_reshape, {l_in: ending2_reshape_input})
 
-        story_ave_matrix = T.sum(T.concatenate(story_ave_matrices, axis = 0), axis = 0) / 4.0
+        story_ave_matrix = T.sum(T.concatenate(story_ave_matrices, axis = 0), axis = 0) / 5.0
         end1_ave_matrix = (T.sum(end1_tensor, axis = 1))/((T.sum(self.ending1_mask, axis = 1)).reshape([self.ending1_mask.shape[0],1]))
         end2_ave_matrix = (T.sum(end2_tensor, axis = 1))/((T.sum(self.ending2_mask, axis = 1)).reshape([self.ending2_mask.shape[0],1]))
 
