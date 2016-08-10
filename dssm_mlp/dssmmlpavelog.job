@@ -2,11 +2,11 @@
 
 #$ -S /bin/bash
 #$ -M jontsai@uchicago.edu
-#$ -N DSSMhinge1
+#$ -N DSSMlog1
 #$ -m beasn
 #$ -r n
-#$ -o DSSMhinge1.out
-#$ -e DSSMhinge1.err
+#$ -o DSSMlog1.out
+#$ -e DSSMlog1.err
 #$ -cwd 
 
 SETTING1="150x500" 
