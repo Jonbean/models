@@ -1,0 +1,24 @@
+#!/bin/bash
+
+#$ -S /bin/bash
+#$ -M jontsai@uchicago.edu
+#$ -N DSSMlog4
+#$ -m beasn
+#$ -r n
+#$ -o DSSMlog4.out
+#$ -e DSSMlog4.err
+#$ -cwd 
+
+SETTING1="150x500" 
+SETTING2="0.0"
+SETTING3="100"
+SETTING4="SGD"
+SETTING5="bilinear" 
+
+export OMP_NUM_THREADS=2
+export OPENBLAS_NUM_THREADS=2
+echo "Start - `date`"
+/home-nfs/jontsai/anaconda/bin/python DSSM_mlpave_train_log.py \
+$SETTING1 $SETTING2 $SETTING3 $SETTING4 $SETTING5
+echo "Finish - `date`"
+
