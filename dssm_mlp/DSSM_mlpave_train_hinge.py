@@ -313,7 +313,7 @@ class DSSM_MLP_Model(object):
             ending2_matrix = utils.padding(ending2_ls)
             ending2_mask = utils.mask_generator(ending2_ls)
 
-            score1, score2 = self.prediction(story_matrix[0], story_matrix[1], story_matrix[2], story_matrix[3], 
+            score1, score2 = self.compute_cost(story_matrix[0], story_matrix[1], story_matrix[2], story_matrix[3], 
                                     story_mask[0], story_mask[1], story_mask[2],story_mask[3],ending1_matrix,  
                                     ending1_mask, ending2_matrix, ending2_mask)
 
@@ -332,7 +332,7 @@ class DSSM_MLP_Model(object):
             ending2 = np.asarray(self.test_ending2[k], dtype='int64').reshape((1,-1))
             ending2_mask = np.ones((1, len(self.test_ending2[k])))
 
-            score1, score2 = self.prediction(story[0], story[1], story[2], story[3], 
+            score1, score2 = self.compute_cost(story[0], story[1], story[2], story[3], 
                                      story_mask[0], story_mask[1], story_mask[2],story_mask[3],
                                      ending1, ending1_mask, ending2, ending2_mask)
             # Answer denotes the index of the anwer
