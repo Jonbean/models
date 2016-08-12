@@ -32,8 +32,8 @@ class PoolingLayer(object):
 
 
 class Neural_Reasoner_Model(object):
-    def __init__(self, rnn_setting, mlp_setting, dropout_rate, batchsize, reasoning_depth, val_split_ratio, 
-                encoderName, wemb_size = None):
+    def __init__(self, rnn_setting, mlp_setting, dropout_rate, batchsize, 
+        reasoning_depth, encoderName, wemb_size = None):
         # Initialize Theano Symbolic variable attributes
         self.story_input_variable = None
         self.story_mask = None
@@ -77,8 +77,9 @@ class Neural_Reasoner_Model(object):
             self.random_init_wemb = True
             self.wemb_size = int(wemb_size)
 
-        self.val_split_ratio = float(val_split_ratio)
         self.encoder_name = encoderName
+
+
         self.train_story = None
         self.train_ending = None
 
@@ -261,12 +262,12 @@ class Neural_Reasoner_Model(object):
         # all_updates = lasagne.updates.momentum(self.cost, all_params, learning_rate = 0.1, momentum=0.9)
 
         self.train_func = theano.function(self.inputs_variables + self.inputs_masks + [target1, target2], 
-                                        [self.cost, prob1, prob2], updates = all_updates)
+                                        [self.cost, score1, score2], updates = all_updates)
 
         # Compute adam updates for training
 
         self.prediction = theano.function(self.inputs_variables + self.inputs_masks + [target1, target2], 
-                                        [self.cost, prob1, prob2])
+                                        [self.cost, score1, score2])
         # pydotprint(self.train_func, './computational_graph.png')
 
     def load_data(self):
@@ -276,19 +277,12 @@ class Neural_Reasoner_Model(object):
 
         val_set = pickle.load(open(self.val_set_path))
 
-        self.val_story = val_set[0]
+        self.val_story = train_set[0]
         self.val_ending1 = val_set[1]
         self.val_ending2 = val_set[2]
         self.val_answer = val_set[3]
 
-        self.val_len = len(self.val_answer)
-        self.val_train_n = int(self.val_split_ratio * self.val_len)
-        self.val_test_n = self.val_len - self.val_train_n
-
-        shuffled_indices_ls = utils.shuffle_index(len(self.val_answer))
-
-        self.val_train_ls = shuffled_indices_ls[:self.val_train_n]
-        self.val_test_ls = shuffled_indices_ls[self.val_train_n:]
+        self.n_val = len(self.val_answer)
 
         test_set = pickle.load(open(self.test_set_path))
         self.test_story = test_set[0]
@@ -340,9 +334,10 @@ class Neural_Reasoner_Model(object):
 
 
     def val_set_test(self):
+
         correct = 0.
 
-        for i in self.val_test_ls:
+        for i in range(self.n_val):
             story = [np.asarray(sent, dtype='int64').reshape((1,-1)) for sent in self.val_story[i]]
             story_mask = [np.ones((1,len(self.val_story[i][j]))) for j in range(4)]
 
@@ -374,7 +369,7 @@ class Neural_Reasoner_Model(object):
                 correct += 1.
 
 
-        return correct/self.val_test_n
+        return correct/self.n_val
 
     def test_set_test(self):
         #load test set data
@@ -441,30 +436,20 @@ class Neural_Reasoner_Model(object):
             print "This model has ", accuracy * 100, "%  accuracy on test set" 
 
     def begin_train(self):
-        N_EPOCHS = 100
+        N_EPOCHS = 50
         N_BATCH = self.batchsize
-        N_TRAIN_INS = self.val_train_n
+        N_TRAIN_INS = len(self.train_ending)
         best_val_accuracy = 0
         best_test_accuracy = 0
-
-        """init test"""
-        print "initial test"
-        val_result = self.val_set_test()
-        print "valid set accuracy: ", val_result*100, "%"
-        if val_result > best_val_accuracy:
-            print "new best! test on test set..."
-            best_val_accuracy = val_result
-
-        test_accuracy = self.test_set_test()
-        print "test set accuracy: ", test_accuracy * 100, "%"
-        if test_accuracy > best_test_accuracy:
-            best_test_accuracy = test_accuracy
-        """end of init test"""
+        test_threshold = 10000/N_BATCH
+        prev_percetage = 0.0
+        speed = 0.0
+        batch_count = 0.0
+        start_batch = 0.0
 
         for epoch in range(N_EPOCHS):
             print "epoch ", epoch,":"
-            shuffled_index_list = self.val_train_ls
-            np.random.shuffle(shuffled_index_list)
+            shuffled_index_list = utils.shuffle_index(N_TRAIN_INS)
 
             max_batch = N_TRAIN_INS/N_BATCH
 
@@ -473,41 +458,58 @@ class Neural_Reasoner_Model(object):
             total_cost = 0.0
             total_err_count = 0.0
 
+
             for batch in range(max_batch):
                 # test 
-                
 
+                if batch_count % test_threshold == 0:
+                    if batch_count == 0:
+                        print "init test"
+                    else:
+                        print "train accuracy"
+                        accuracy = 1.0 - (total_err_count/((batch+1)*N_BATCH))
+                        print "training set accuracy: ", accuracy * 100, "%"
+                    val_result = self.val_set_test()
+                    print "accuracy is: ", val_result*100, "%"
+                    if val_result >= best_val_accuracy:
+                        print "new best!"
+                        best_val_accuracy = val_result
+                        test_accuracy = self.test_set_test()
+                        print "test set accuracy: ", test_accuracy * 100, "%"
+                        if test_accuracy > best_test_accuracy:
+                            best_test_accuracy = test_accuracy
                 #test end
-                batch_index_list = [shuffled_index_list[i] for i in range(batch * N_BATCH, (batch+1) * N_BATCH)]
-                train_story = [[self.val_story[index][i] for index in batch_index_list] for i in range(self.story_nsent)]
-                train_ending = [self.val_ending1[index] for index in batch_index_list]
-                neg_end1 = [self.val_ending2[index] for index in batch_index_list]
-                # neg_end_index_list = np.random.randint(N_TRAIN_INS, size = (N_BATCH,))
-                # while np.any((np.asarray(batch_index_list) - neg_end_index_list) == 0):
-                #     neg_end_index_list = np.random.randint(N_TRAIN_INS, size = (N_BATCH,))
-                # neg_end1 = [self.train_ending[index] for index in neg_end_index_list]
-                # answer = np.random.randint(2, size = N_BATCH)
-                # target1 = 1 - answer
-                # target2 = 1 - target1
-                answer = np.asarray([self.val_answer[index] for index in batch_index_list])
 
+                batch_index_list = [shuffled_index_list[i] for i in range(batch * N_BATCH, (batch+1) * N_BATCH)]
+                train_story = [[self.train_story[index][i] for index in batch_index_list] for i in range(1, self.story_nsent+1)]
+                train_ending = [self.train_ending[index] for index in batch_index_list]
+
+                neg_end_index_list = np.random.randint(N_TRAIN_INS, size = (N_BATCH,))
+                while np.any((np.asarray(batch_index_list) - neg_end_index_list) == 0):
+                    neg_end_index_list = np.random.randint(N_TRAIN_INS, size = (N_BATCH,))
+                neg_end1 = [self.train_ending[index] for index in neg_end_index_list]
+                answer = np.random.randint(2, size = N_BATCH)
                 target1 = 1 - answer
-                target2 = answer
+                target2 = 1 - target1
+                # answer = np.asarray([self.val_answer[index] for index in batch_index_list])
+
+                # target1 = 1 - answer
+                # target2 = answer
                 # answer_vec = np.concatenate(((1 - answer).reshape(-1,1), answer.reshape(-1,1)),axis = 1)
                 end1 = []
                 end2 = []
 
-                # for i in range(N_BATCH):
-                #     if answer[i] == 0:
-                #         end1.append(train_ending[i])
-                #         end2.append(neg_end1[i])
-                #     else:
-                #         end1.append(neg_end1[i])
-                #         end2.append(train_ending[i])
-
                 for i in range(N_BATCH):
-                    end1.append(train_ending[i])
-                    end2.append(neg_end1[i])
+                    if answer[i] == 0:
+                        end1.append(train_ending[i])
+                        end2.append(neg_end1[i])
+                    else:
+                        end1.append(neg_end1[i])
+                        end2.append(train_ending[i])
+
+                # for i in range(N_BATCH):
+                #     end1.append(train_ending[i])
+                #     end2.append(neg_end1[i])
 
                 train_story_matrices = [utils.padding(batch_sent) for batch_sent in train_story]
                 train_end1_matrix = utils.padding(end1)
@@ -541,24 +543,17 @@ class Neural_Reasoner_Model(object):
 
 
 
-
-
                 total_cost += cost
 
+            total_accuracy = 1.0 - (total_err_count/((max_batch)*N_BATCH))
+            speed = max_batch * N_BATCH / (time.time() - start_time)
             print "======================================="
             print "epoch summary:"
-            print "total cost in this epoch: ", total_cost
-            print "accuracy on training set: ", (1.0-(total_err_count / (N_BATCH * max_batch) ) )* 100, "%"
-            val_result = self.val_set_test()
-            print "accuracy is: ", val_result*100, "%"
-            if val_result > best_val_accuracy:
-                print "new best! test on test set..."
-                best_val_accuracy = val_result
+            print "average speed: ", speed, "instances/sec"
 
-            test_accuracy = self.test_set_test()
-            print "test set accuracy: ", test_accuracy * 100, "%"
-            if test_accuracy > best_test_accuracy:
-                best_test_accuracy = test_accuracy
+            print ""
+            print "total cost in this epoch: ", total_cost
+            print "accuracy in this epoch: ", total_accuracy * 100, "%"
             print "======================================="
 
 
@@ -566,10 +561,9 @@ class Neural_Reasoner_Model(object):
 
 def main(argv):
     wemb_size = None
-    if len(argv) > 7:
-        wemb_size = argv[7]
-    model = Neural_Reasoner_Model(argv[0], argv[1], argv[2], argv[3], 
-                                  argv[4], argv[5], argv[6], wemb_size)
+    if len(argv) > 5:
+        wemb_size = argv[5]
+    model = Neural_Reasoner_Model(argv[0], argv[1], argv[2], argv[3], argv[4], wemb_size)
 
     print "loading data"
     model.load_data()
