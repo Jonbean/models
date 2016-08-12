@@ -4,13 +4,14 @@ import lasagne
 import numpy as np
 
 class BlstmEncoder(object):
-    def __init__(self, LAYER_1_UNITS):
+    def __init__(self, LAYER_1_UNITS, dropout_rate):
         self.layer1_units = LAYER_1_UNITS
         self.wemb = None
         self.GRAD_CLIP = 100.
         self.l_in = None
         self.l_mask = None
         self.output = None
+        self.dropout_rate = dropout_rate
 
     def build_model(self, WordEmbedding_Init = None):
 
@@ -41,7 +42,7 @@ class BlstmEncoder(object):
         # The embedding layers with retieve subtensor from word embedding matrix
         l_emb = lasagne.layers.EmbeddingLayer(self.l_in, input_size=self.wemb.get_value().shape[0], output_size=self.wemb.get_value().shape[1], W=self.wemb)
 
-        l_drop = lasagne.layers.DropoutLayer(l_emb, p = 0.15)
+        l_drop = lasagne.layers.DropoutLayer(l_emb, p = self.dropout_rate)
         # The LSTM layer should have the same mask input in order to avoid padding entries
         l_lstm = lasagne.layers.recurrent.LSTMLayer(l_drop, 
                                                     num_units=self.layer1_units,
