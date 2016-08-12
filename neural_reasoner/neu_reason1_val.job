@@ -2,11 +2,11 @@
 
 #$ -S /bin/bash
 #$ -M jontsai@uchicago.edu
-#$ -N neu_reas1_val
+#$ -N neu_r1_val
 #$ -m beasn
 #$ -r n
-#$ -o neu_reas1_val.out
-#$ -e neu_reas1_val.err
+#$ -o neu_r1_val.out
+#$ -e neu_r1_val.err
 #$ -cwd 
 
 SETTING1="512" 

@@ -2,11 +2,11 @@
 
 #$ -S /bin/bash
 #$ -M jontsai@uchicago.edu
-#$ -N neu_reas2
+#$ -N neu_reason2
 #$ -m beasn
 #$ -r n
-#$ -o neu_reas2.out
-#$ -e neu_reas2.err
+#$ -o neu_reason2.out
+#$ -e neu_reason2.err
 #$ -cwd 
 
 SETTING1="512" 
@@ -14,11 +14,12 @@ SETTING2="256x512"
 SETTING3="0.0" 
 SETTING4="50"
 SETTING5="3"
+SETTING6="BGRU"
 
 export OMP_NUM_THREADS=2
 export OPENBLAS_NUM_THREADS=2
 echo "Start - `date`"
 /home-nfs/jontsai/anaconda/bin/python GRUencoder_MLPreasoner.py \
-$SETTING1 $SETTING2 $SETTING3 $SETTING4 $SETTING5
+$SETTING1 $SETTING2 $SETTING3 $SETTING4 $SETTING5 $SETTING6
 echo "Finish - `date`"
 
