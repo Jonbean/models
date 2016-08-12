@@ -475,7 +475,7 @@ class Hierachi_RNN(object):
 
             for batch in range(max_batch):
                 batch_index_list = [shuffled_index_list[i] for i in range(batch * N_BATCH, (batch+1) * N_BATCH)]
-                train_story = [[self.train_story[index][i] for index in batch_index_list] for i in range(self.story_nsent)]
+                train_story = [[self.train_story[index][i] for index in batch_index_list] for i in range(1,self.story_nsent+1)]
                 train_ending = [self.train_ending[index] for index in batch_index_list]
 
                 train_story_matrices = [utils.padding(batch_sent) for batch_sent in train_story]
