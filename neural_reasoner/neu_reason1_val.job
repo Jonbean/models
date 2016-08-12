@@ -21,6 +21,6 @@ export OMP_NUM_THREADS=2
 export OPENBLAS_NUM_THREADS=2
 echo "Start - `date`"
 /home-nfs/jontsai/anaconda/bin/python RNNencoder_MLPreasoner_val.py \
-$SETTING1 $SETTING2 $SETTING3 $SETTING4 $SETTING5
+$SETTING1 $SETTING2 $SETTING3 $SETTING4 $SETTING5 $SETTING6 $SETTING7
 echo "Finish - `date`"
 
