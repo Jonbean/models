@@ -340,7 +340,7 @@ class Hierachi_RNN(object):
             
             # Answer denotes the index of the anwer
             prediction = np.argmax(np.concatenate((score1, score2), axis=1))
-            predict_seq.append(prediction)
+            # predict_seq.append(prediction)
             predict_answer = 0
             if prediction == 0:
                 predict_answer = 1
@@ -355,7 +355,7 @@ class Hierachi_RNN(object):
                 correct += 1.
 
 
-        return correct/self.val_test_n, predict_seq
+        return correct/self.val_test_n
 
     def test_set_test(self):
         #load test set data
@@ -427,10 +427,9 @@ class Hierachi_RNN(object):
         N_TRAIN_INS = self.val_train_n
         best_val_accuracy = 0
         best_test_accuracy = 0
-        predict_s = None
         """init test"""
         print "initial test"
-        val_result, predict_s = self.val_set_test()
+        val_result = self.val_set_test()
         print "valid set accuracy: ", val_result*100, "%"
         if val_result > best_val_accuracy:
             print "new best! test on test set..."
@@ -511,15 +510,11 @@ class Hierachi_RNN(object):
             print "epoch summary:"
             print "total cost in this epoch: ", total_cost
             print "accuracy on training set: ", (1.0-(total_err_count / (N_BATCH * (max_batch + 1)))) * 100, "%"
-            val_result, predict_sequence = self.val_set_test()
+            val_result = self.val_set_test()
             print "accuracy is: ", val_result*100, "%"
             if val_result > best_val_accuracy:
                 print "new best! test on test set..."
                 best_val_accuracy = val_result
-            if np.any(np.asarray(predict_sequence) - np.asarray(predict_s)!=0):
-                print "prediction changed!"
-            else:
-                print "no change!"
 
             test_accuracy = self.test_set_test()
             print "test set accuracy: ", test_accuracy * 100, "%"
