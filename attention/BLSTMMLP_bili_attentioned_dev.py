@@ -107,9 +107,8 @@ class Hierachi_RNN(object):
             n_batch, n_seq, _ = self.train_encodinglayer_vecs[i].shape
 
             #second attention
-            broadcast_attention_matrix = self.bilinear_attention_matrix.reshape((1, self.rnn_units, self.rnn_units)) + T.zeros(())
 
-            bili_part1 = T.dot(self.train_encodinglayer_vecs[i], broadcast_attention_matrix)
+            bili_part1 = T.dot(self.train_encodinglayer_vecs[i], self.bilinear_attention_matrix)
 
             attention1_score_tensor = T.batched_dot(bili_part1, self.train_encodinglayer_vecs[4])
 
