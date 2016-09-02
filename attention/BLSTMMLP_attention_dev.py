@@ -90,13 +90,9 @@ class Hierachi_RNN(object):
                                                         self.encoder.l_mask:self.inputs_masks[5]},
                                                         deterministic = True)
 
-        l_end_in= lasagne.layers.InputLayer((None, None, self.rnn_units))
-        l_shuffle = lasagne.layers.DimshuffleLayer(l_end_in, (0,2,1))
-        l_pooling = lasagne.layers.GlobalPoolLayer(l_shuffle)
+        end1_representation = (ending1_sequence_tensor * self.inputs_masks[4].dimshuffle(0,1,'x')).sum(axis = 1) / self.inputs_masks[4].sum(axis = 1, keepdims = True)
+        end2_representation = (ending2_sequence_tensor * self.inputs_masks[5].dimshuffle(0,1,'x')).sum(axis = 1) / self.inputs_masks[5].sum(axis = 1, keepdims = True)
 
-
-        end1_representation = lasagne.layers.get_output(l_pooling, {l_end_in:ending1_sequence_tensor})
-        end2_representation = lasagne.layers.get_output(l_pooling, {l_end_in:ending2_sequence_tensor})
         self.train_encodinglayer_vecs.append(end1_representation)
         self.train_encodinglayer_vecs.append(end2_representation)
         
