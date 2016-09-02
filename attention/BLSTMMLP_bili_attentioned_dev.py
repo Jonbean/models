@@ -95,7 +95,7 @@ class Hierachi_RNN(object):
 
 
         end1_representation = (ending1_sequence_tensor * self.inputs_masks[4].dimshuffle(0,1,'x')).sum(axis = 1) / self.inputs_masks[4].sum(axis = 1, keepdims = True)
-        end2_representation = (ending1_sequence_tensor * self.inputs_masks[5].dimshuffle(0,1,'x')).sum(axis = 1) / self.inputs_masks[5].sum(axis = 1, keepdims = True)
+        end2_representation = (ending2_sequence_tensor * self.inputs_masks[5].dimshuffle(0,1,'x')).sum(axis = 1) / self.inputs_masks[5].sum(axis = 1, keepdims = True)
 
         self.train_encodinglayer_vecs.append(end1_representation)
         self.train_encodinglayer_vecs.append(end2_representation)
