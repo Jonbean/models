@@ -509,7 +509,10 @@ class Hierachi_RNN(object):
                         if test_accuracy > best_test_accuracy:
                             best_test_accuracy = test_accuracy
 
+                    total_err_count = 0.0
+
                 batch_count += 1
+
             print "======================================="
             print "epoch summary:"
             print "average cost in this epoch: ", total_cost
