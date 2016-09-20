@@ -92,7 +92,7 @@ class Hierachi_RNN(object):
         for i in range(self.story_nsent):
             self.train_encodinglayer_vecs.append(lasagne.layers.get_output(self.encoder.output,
                                                         {self.encoder.l_in:self.reshaped_inputs_variables[i], 
-                                                         self.encoder.l_mask:self.inputs_masks[i]},
+                                                          self.encoder.l_mask:self.inputs_masks[i]},
                                                          deterministic = True))
         ending_sequence_tensor = lasagne.layers.get_output(self.encoder.output,
                                                         {self.encoder.l_in:self.reshaped_inputs_variables[4],
