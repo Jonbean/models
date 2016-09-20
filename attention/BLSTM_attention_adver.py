@@ -24,7 +24,7 @@ class Hierachi_RNN(object):
         self.story_nsent = 4
 
         self.cost = None
-        self.learning_rate = learning_rate
+        self.learning_rate = float(learning_rate)
         self.train_func = None
 
         # Initialize data loading attributes
