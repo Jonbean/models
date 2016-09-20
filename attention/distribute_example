@@ -1,0 +1,4 @@
+for i in `seq 0.0015 0.0005 0.006`; do
+    export OMP_NUM_THREADS=2 export OPENBLAS_NUM_THREADS=2 /home-nfs/jontsai/anaconda/bin/python BLSTM_attention_adver.py 300 100 "512x1024x512" "$i" "adam" > /home-nfs/jontsai/ROC/DSSM/attention/adv$i;
+done
+
