@@ -1,0 +1,24 @@
+#!/bin/bash
+
+#$ -S /bin/bash
+#$ -M jontsai@uchicago.edu
+#$ -N HierRNN_Adv4
+#$ -m beasn
+#$ -r n
+#$ -o HierRNN_Adv4.out
+#$ -e HierRNN_Adv4.err
+#$ -cwd 
+
+SETTING1="300" 
+SETTING2="100"
+SETTING3="512x1024x512"
+SETTING4="0.003"
+SETTING5="adam" 
+
+export OMP_NUM_THREADS=2
+export OPENBLAS_NUM_THREADS=2
+echo "Start - `date`"
+/home-nfs/jontsai/anaconda/bin/python BLSTM_attention.py \
+$SETTING1 $SETTING2 $SETTING3 $SETTING4 $SETTING5
+echo "Finish - `date`"
+
