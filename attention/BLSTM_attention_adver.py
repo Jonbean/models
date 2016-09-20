@@ -509,7 +509,6 @@ class Hierachi_RNN(object):
 
             print "======================================="
             print "epoch summary:"
-            print "average cost in this epoch: ", total_cost
             print "average speed: ", N_TRAIN_INS/(time.time() - start_time), "instances/s "
             print "total main cost: ", total_main_cost
             print "total liar cost: ", total_liar_cost
