@@ -17,14 +17,14 @@ import sys
 
 
 class Hierachi_RNN(object):
-    def __init__(self, rnn_setting, batchsize, wemb_size = None):
+    def __init__(self, rnn_setting, batchsize, liar_setting, learning_rate, optimizer, wemb_size = None):
         # Initialize Theano Symbolic variable attributes
         self.story_input_variable = None
         self.story_mask = None
         self.story_nsent = 4
 
         self.cost = None
-
+        self.learning_rate = learning_rate
         self.train_func = None
 
         # Initialize data loading attributes
@@ -35,8 +35,7 @@ class Hierachi_RNN(object):
         self.wemb_matrix_path = '../../data/pickles/index_wemb_matrix.pkl'
 
         self.rnn_units = int(rnn_setting)
-        # self.mlp_units = [int(elem) for elem in mlp_setting.split('x')]
-        self.bilinear_matrix = theano.shared(0.002*np.random.rand(self.rnn_units, self.rnn_units)-0.001)
+        self.liar_setting = [int(elem) for elem in liar_setting.split('x')]
         # self.dropout_rate = float(dropout_rate)
         self.batchsize = int(batchsize)
 
@@ -54,7 +53,8 @@ class Hierachi_RNN(object):
         self.train_ending = None
 
 
-        self.liar_setting = [512, 1024, 512]
+        self.liar_setting = liar_setting
+        self.optimizer = optimizer
 
         self.val_story = None
         self.val_ending1 = None 
@@ -247,7 +247,7 @@ class Hierachi_RNN(object):
         cost2 = lasagne.objectives.categorical_crossentropy(prob2, T.zeros((self.current_Nbatch, )).astype('int64'))
         liar_cost = lasagne.objectives.categorical_crossentropy(prob2, T.ones((self.current_Nbatch, )).astype('int64'))
 
-        self.main_cost = lasagne.objectives.aggregate(cost1+cost2, mode='sum')
+        self.main_cost = lasagne.objectives.aggregate(cost1+cost2, mode = 'sum')
         self.liar_cost = lasagne.objectives.aggregate(liar_cost, mode = 'sum')
 
         # Retrieve all parameters from the network
@@ -255,9 +255,16 @@ class Hierachi_RNN(object):
 
         liar_params = self.DNN_liar.all_params
 
-        main_updates = lasagne.updates.adam(self.main_cost, main_params, learning_rate=0.001)
+        main_updates = None
+        liar_updates = None
 
-        liar_updates = lasagne.updates.adam(self.liar_cost, liar_params, learning_rate = 0.001)
+        if self.optimizer == 'adam':
+            main_updates = lasagne.updates.adam(self.main_cost, main_params, learning_rate=self.learning_rate)
+
+            liar_updates = lasagne.updates.adam(self.liar_cost, liar_params, learning_rate=self.learning_rate)
+        else:
+            main_updates = lasagne.updates.momentum(self.main_cost, main_params, learning_rate=self.learning_rate, momentum=0.9)
+            liar_updates = lasagne.updates.momentum(self.liar_cost, liar_params, learning_rate=self.learning_rate, momentum=0.9)
         # all_updates = lasagne.updates.momentum(self.cost, all_params, learning_rate = 0.05, momentum=0.9)
 
         all_updates = []
@@ -476,13 +483,13 @@ class Hierachi_RNN(object):
                     else:
                         predict_answer[i] = 0
 
-                total_err_count += (abs(predict_answer)).sum()
+                total_err_count += predict_answer.sum()
                 total_main_cost += main_cost
                 total_liar_cost += liar_cost
 
 
                 if batch_count % test_threshold == 0 and batch_count != 0:
-                    print "error rate on training set: ", (total_err_count * 1.0)/((test_threshold+1) * N_BATCH)*100.0, "%"
+                    print "error rate on training set: ", (total_err_count * 1.0)/((batch + 1) * N_BATCH)*100.0, "%"
 
                     print "test on val set..."
                     val_result = self.val_set_test()
@@ -504,25 +511,16 @@ class Hierachi_RNN(object):
             print "epoch summary:"
             print "average cost in this epoch: ", total_cost
             print "average speed: ", N_TRAIN_INS/(time.time() - start_time), "instances/s "
-
-            val_result = self.val_set_test()
-            print "accuracy is: ", val_result*100, "%"
-            if val_result > best_val_accuracy:
-                print "new best! test on test set..."
-                best_val_accuracy = val_result
-
-            test_accuracy = self.test_set_test()
-            print "test set accuracy: ", test_accuracy * 100, "%"
-            if test_accuracy > best_test_accuracy:
-                best_test_accuracy = test_accuracy
+            print "total main cost: ", total_main_cost
+            print "total liar cost: ", total_liar_cost
             print "======================================="
 
 
 def main(argv):
     wemb_size = None
-    if len(argv) > 2:
-        wemb_size = argv[2]
-    model = Hierachi_RNN(argv[0], argv[1], wemb_size)
+    if len(argv) > 5:
+        wemb_size = argv[5]
+    model = Hierachi_RNN(argv[0], argv[1], argv[2], argv[3], argv[4], wemb_size)
 
     print "loading data"
     model.load_data()
