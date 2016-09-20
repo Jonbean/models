@@ -14,7 +14,9 @@ class DNNLiar(object):
         self.l_in = lasagne.layers.InputLayer(shape=(None, self.inputs_size * 2))
         self.hidden_layers.append(self.l_in)
         for i in range(len(self.layer_units)):
-            self.hidden_layers.append(lasagne.layers.DenseLayer(self.hidden_layers[i], self.layer_units[i]))
+            self.hidden_layers.append(lasagne.layers.DenseLayer(self.hidden_layers[i], 
+                                        num_units=self.layer_units[i],
+                                        nonlinearity=lasagne.nonlinearities.tanh))
 
 
         self.output = lasagne.layers.DenseLayer(self.hidden_layers[-1], self.inputs_size)

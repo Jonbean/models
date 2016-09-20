@@ -53,7 +53,6 @@ class Hierachi_RNN(object):
         self.train_ending = None
 
 
-        self.liar_setting = liar_setting
         self.optimizer = optimizer
 
         self.val_story = None
