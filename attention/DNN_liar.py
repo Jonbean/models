@@ -11,9 +11,6 @@ class DNNLiar(object):
         self.hidden_layers = []
         self.dropout_rate = 0.0
 
-        print type(self.inputs_size)
-        print type(self.layer_units[0])
-
         self.l_in = lasagne.layers.InputLayer(shape=(None, self.inputs_size * 2))
         self.hidden_layers.append(self.l_in)
         for i in range(len(self.layer_units)):
