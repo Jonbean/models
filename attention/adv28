@@ -1,0 +1,17 @@
+#!/bin/bash
+#$ -S /bin/bash
+#$ -M jontsai@uchicago.edu
+#$ -N HierRNN_Adv11
+#$ -m beasn
+#$ -r n
+#$ -cwd 
+SETTING1="300" 
+SETTING2="100"
+SETTING3="512x1024x512"
+SETTING4=0.014
+SETTING5="adam" 
+SETTING6="./adv"28
+export OMP_NUM_THREADS=2
+export OPENBLAS_NUM_THREADS=2
+/home-nfs/jontsai/anaconda/bin/python BLSTM_attention_adver.py \
+$SETTING1 $SETTING2 $SETTING3 $SETTING4 $SETTING5 $SETTING6
