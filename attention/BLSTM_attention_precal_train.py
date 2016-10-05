@@ -438,7 +438,8 @@ class Hierachi_RNN(object):
 
                 answer_vec = np.concatenate(((1 - answer).reshape(-1,1), answer.reshape(-1,1)),axis = 1)
                 
-
+                end1 = []
+                end2 = []
                 for i in range(N_BATCH):
                     if answer[i] == 0:
                         end1.append(end[i])
