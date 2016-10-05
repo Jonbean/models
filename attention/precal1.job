@@ -1,0 +1,22 @@
+#!/bin/bash
+
+#$ -S /bin/bash
+#$ -M jontsai@uchicago.edu
+#$ -N HierRNN_pre1
+#$ -m beasn
+#$ -r n
+#$ -o HierRNN_pre1.out
+#$ -e HierRNN_pre1.err
+#$ -cwd 
+
+SETTING1="300" 
+SETTING2="100"
+SETTING5="most_simi_end_pair" 
+
+export OMP_NUM_THREADS=2
+export OPENBLAS_NUM_THREADS=2
+echo "Start - `date`"
+/home-nfs/jontsai/anaconda/bin/python BLSTM_attention_adver.py \
+$SETTING1 $SETTING2 $SETTING3
+echo "Finish - `date`"
+
