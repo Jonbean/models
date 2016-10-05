@@ -432,11 +432,14 @@ class Hierachi_RNN(object):
                 # while np.any((np.asarray(batch_index_list) - neg_end_index_list) == 0):
                 #     neg_end_index_list = np.random.randint(N_TRAIN_INS, size = (N_BATCH,))
                 # neg_end1 = [self.train_ending[index] for index in neg_end_index_list]
+
+                # answer == 0 ==> first end is correct
+                # answer == 1 ==> second end is correct
                 answer = np.random.randint(2, size = N_BATCH)
                 target1 = 1 - answer
                 target2 = 1 - target1
 
-                answer_vec = np.concatenate(((1 - answer).reshape(-1,1), answer.reshape(-1,1)),axis = 1)
+                # answer_vec = np.concatenate(((1 - answer).reshape(-1,1), answer.reshape(-1,1)),axis = 1)
                 
                 end1 = []
                 end2 = []
@@ -457,19 +460,26 @@ class Hierachi_RNN(object):
                 train_end2_mask = utils.mask_generator(end2)
                 
 
-                cost, prob = self.train_func(train_story_matrices[0], train_story_matrices[1], train_story_matrices[2],
+                cost, prediction1, prediction2 = self.train_func(train_story_matrices[0], train_story_matrices[1], train_story_matrices[2],
                                                                train_story_matrices[3], train_end1_matrix, train_end2_matrix,
                                                                train_story_mask[0], train_story_mask[1], train_story_mask[2],
-                                                               train_story_mask[3], train_end1_mask, train_end2_mask, answer)
+                                                               train_story_mask[3], train_end1_mask, train_end2_mask, target1, target2)
 
+                prediction = np.argmax(np.concatenate((prediction1, prediction2), axis = 1), axis = 1)
+                predict_answer = np.zeros((N_BATCH, ))
+                for i in range(N_BATCH):
+                    if prediction[i] == 0:
+                        predict_answer[i] = 1
+                    elif prediction[i] == 1:
+                        predict_answer[i] = 0
+                    elif prediction[i] == 2:
+                        predict_answer[i] = 0
+                    else:
+                        predict_answer[i] = 1
 
-
-                prediction = np.argmax(prob, axis = 1)
-                
-                err_num = (abs(prediction - answer)).sum()
-                total_err_count += err_num
-
+                total_err_count += (abs(predict_answer - answer)).sum()
                 total_cost += cost
+
                 if batch_count % test_threshold == 0 and batch_count != 0:
                     print "accuracy on training set: ", (total_correct_count/((batch+1.0) * N_BATCH))*100.0, "%"
 
