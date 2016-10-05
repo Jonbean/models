@@ -481,7 +481,7 @@ class Hierachi_RNN(object):
                 total_cost += cost
 
                 if batch_count % test_threshold == 0 and batch_count != 0:
-                    print "accuracy on training set: ", (total_correct_count/((batch+1.0) * N_BATCH))*100.0, "%"
+                    print "error rate on training set: ", (total_err_count/((batch+1.0) * N_BATCH))*100.0, "%"
 
                     print "test on val set..."
                     val_result = self.val_set_test()
