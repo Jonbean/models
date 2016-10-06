@@ -11,12 +11,12 @@
 
 SETTING1="300" 
 SETTING2="100"
-SETTING5="most_simi_storyplotNend_pair" 
+SETTING5="most_simi_storyplot_pair" 
 
 export OMP_NUM_THREADS=2
 export OPENBLAS_NUM_THREADS=2
 echo "Start - `date`"
-/home-nfs/jontsai/anaconda/bin/python BLSTM_attention_precal_train.py \
+/home-nfs/jontsai/anaconda/bin/python BLSTM_attention_adver.py \
 $SETTING1 $SETTING2 $SETTING3
 echo "Finish - `date`"
 
