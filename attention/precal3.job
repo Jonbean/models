@@ -2,11 +2,11 @@
 
 #$ -S /bin/bash
 #$ -M jontsai@uchicago.edu
-#$ -N HierRNN_pre1
+#$ -N HierRNN_pre3
 #$ -m beasn
 #$ -r n
-#$ -o HierRNN_pre1.out
-#$ -e HierRNN_pre1.err
+#$ -o HierRNN_pre3.out
+#$ -e HierRNN_pre3.err
 #$ -cwd 
 
 SETTING1="300" 
@@ -16,7 +16,7 @@ SETTING5="most_simi_storyplot_pair"
 export OMP_NUM_THREADS=2
 export OPENBLAS_NUM_THREADS=2
 echo "Start - `date`"
-/home-nfs/jontsai/anaconda/bin/python BLSTM_attention_adver.py \
+/home-nfs/jontsai/anaconda/bin/python BLSTM_attention_precal_train.py \
 $SETTING1 $SETTING2 $SETTING3
 echo "Finish - `date`"
 
