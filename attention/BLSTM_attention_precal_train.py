@@ -500,7 +500,7 @@ class Hierachi_RNN(object):
             print "epoch summary:"
             print "average cost in this epoch: ", total_cost
             print "average speed: ", N_TRAIN_INS/(time.time() - start_time), "instances/s "
-            print "train set accuracy: ", (total_err_count / (max_batch * N_BATCH)) * 100.0, "%"
+            print "train set error rate: ", (total_err_count / (max_batch * N_BATCH)) * 100.0, "%"
             print "======================================="
 
 def main(argv):
