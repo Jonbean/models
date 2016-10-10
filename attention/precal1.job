@@ -11,7 +11,7 @@
 
 SETTING1="300" 
 SETTING2="50"
-SETTING5="most_simi_storyplotNend_pair" 
+SETTING3="most_simi_storyplotNend_pair" 
 
 export OMP_NUM_THREADS=2
 export OPENBLAS_NUM_THREADS=2
