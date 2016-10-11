@@ -422,7 +422,7 @@ class Hierachi_RNN(object):
     def adv_model_monitor(self):
         '''part I pass story to RNN reader and adv generator'''
         self.n_train = len(self.train_ending)
-        stories_indices = np.random.randint(self.n_train, (5,))
+        stories_indices = np.random.randint(self.n_train, size=(5,))
         peek_story = [[self.train_story[index][i] for index in stories_indices] for i in range(1,self.story_nsent+1)]
         peek_ending = [self.train_ending[index] for index in stories_indices]
 
@@ -461,12 +461,12 @@ class Hierachi_RNN(object):
         '''part III print out story and the most similar end correspondingly'''
         for i in range(5):
             index = stories_indices[i]
-            story_string = " | ".join([" ".join(index2word_dict[self.train_story[index][j][k]] for k in range(len(self.train_story[index][j])))] for j in range(5))
-            story_end = " ".join(index2word_dict[self.train_ending[index][k]] for k in range(len(self.train_ending[index])))
-            generated_end = " ".join(index2word_dict[self.train_ending[index_list[i]][k]] for k in range(len(self.train_ending[index_list[i]])))
+            story_string = " | ".join([" ".join([index2word_dict[self.train_story[index][j][k]] for k in range(len(self.train_story[index][j]))]) for j in range(5)])
+            story_end = " ".join([index2word_dict[self.train_ending[index][k]] for k in range(len(self.train_ending[index]))])
+            generated_end = " ".join([index2word_dict[self.train_ending[index_list[i]][k]] for k in range(len(self.train_ending[index_list[i]]))])
 
-            print story_string + "#END#" + story_end
-            print "adv model generated:" + generated_end
+            print story_string + " #END# " + story_end
+            print "adv model generated: " + generated_end
             
     def begin_train(self):
         N_EPOCHS = 100
@@ -563,7 +563,7 @@ class Hierachi_RNN(object):
             print "total liar cost: "+str(total_liar_cost)+''
             print "======================================="
             print "adversarial model monitor"
-
+            self.adv_model_monitor()
             print "======================================="
 
         result_file.close()
