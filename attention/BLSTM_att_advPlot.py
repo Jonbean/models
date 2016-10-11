@@ -17,7 +17,7 @@ import sys
 
 
 class Hierachi_RNN(object):
-    def __init__(self, rnn_setting, batchsize, liar_setting, learning_rate, optimizer, result_file_path, wemb_size = None):
+    def __init__(self, rnn_setting, batchsize, liar_setting, learning_rate, optimizer, wemb_size = None):
         # Initialize Theano Symbolic variable attributes
         self.story_input_variable = None
         self.story_mask = None
@@ -26,7 +26,6 @@ class Hierachi_RNN(object):
         self.cost = None
         self.learning_rate = float(learning_rate)
         self.train_func = None
-        self.result_file = result_file_path
         # Initialize data loading attributes
         self.wemb = None
         self.val_set_path = '../../data/pickles/val_index_corpus.pkl'
@@ -427,23 +426,22 @@ class Hierachi_RNN(object):
         test_threshold = 10000/N_BATCH
         batch_count = 0.0
         start_batch = 0.0
-        result_file = open(self.result_file, 'w', 1)
 
         '''init test'''
-        result_file.write( "initial test...\n")
+        print "initial test..."
         val_result = self.val_set_test()
-        result_file.write( "accuracy is: "+str( val_result*100) +"%\n")
+        print "accuracy is: "+str( val_result*100) +"%"
         if val_result > best_val_accuracy:
             best_val_accuracy = val_result
 
         test_accuracy = self.test_set_test()
-        result_file.write( "test set accuracy: "+ str(test_accuracy * 100)+ "%\n")
+        print "test set accuracy: "+ str(test_accuracy * 100)+ "%"
         if test_accuracy > best_test_accuracy:
             best_test_accuracy = test_accuracy
         '''end of init test'''
 
         for epoch in range(N_EPOCHS):
-            result_file.write( "epoch "+str(epoch)+":\n")
+            print "epoch "+str(epoch)+":"
             shuffled_index_list = utils.shuffle_index(N_TRAIN_INS)
 
             max_batch = N_TRAIN_INS/N_BATCH
@@ -489,17 +487,17 @@ class Hierachi_RNN(object):
 
 
                 if batch_count % test_threshold == 0 and batch_count != 0:
-                    result_file.write( "error rate on training set: "+ str((total_err_count * 1.0)/((batch + 1) * N_BATCH)*100.0)+"%\n")
+                    print "error rate on training set: "+ str((total_err_count * 1.0)/((batch + 1) * N_BATCH)*100.0)+"%"
 
-                    result_file.write( "test on val set...\n")
+                    print "test on val set..."
                     val_result = self.val_set_test()
-                    result_file.write( "accuracy is: "+str(val_result*100)+"%\n")
+                    print "accuracy is: "+str(val_result*100)+"%"
                     if val_result > best_val_accuracy:
-                        result_file.write( "new best! test on test set...\n")
+                        print "new best! test on test set..."
                         best_val_accuracy = val_result
 
                         test_accuracy = self.test_set_test()
-                        result_file.write( "test set accuracy: "+str(test_accuracy * 100)+"%\n")
+                        print "test set accuracy: "+str(test_accuracy * 100)+"%"
                         if test_accuracy > best_test_accuracy:
                             best_test_accuracy = test_accuracy
 
@@ -507,20 +505,20 @@ class Hierachi_RNN(object):
 
                 batch_count += 1
 
-            result_file.write( "=======================================\n")
-            result_file.write( "epoch summary:\n")
-            result_file.write( "average speed: "+str(N_TRAIN_INS/(time.time() - start_time))+"instances/s \n")
-            result_file.write( "total main cost: "+str(total_main_cost)+'\n')
-            result_file.write( "total liar cost: "+str(total_liar_cost)+'\n')
-            result_file.write( "=======================================\n")
+            print "======================================="
+            print "epoch summary:"
+            print "average speed: "+str(N_TRAIN_INS/(time.time() - start_time))+"instances/s "
+            print "total main cost: "+str(total_main_cost)+''
+            print "total liar cost: "+str(total_liar_cost)+''
+            print "======================================="
 
         result_file.close()
 
 def main(argv):
     wemb_size = None
-    if len(argv) > 6:
-        wemb_size = argv[6]
-    model = Hierachi_RNN(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5], wemb_size)
+    if len(argv) > 5:
+        wemb_size = argv[5]
+    model = Hierachi_RNN(argv[0], argv[1], argv[2], argv[3], argv[4], wemb_size)
 
     print "loading data"
     model.load_data()
