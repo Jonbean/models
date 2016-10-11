@@ -195,7 +195,7 @@ class Hierachi_RNN(object):
 
         # self.DNN_liar.l_in.shape = (n_batch, self.rnn_units * 2)
         # self.DNN_liar.output = (n_batch, self.rnn_units)
-        self.DNN_liar = DNN_liar.DNNLiar(INPUTS_SIZE = self.rnn_units, LAYER_UNITS = self.liar_setting)
+        self.DNN_liar = DNN_liar.DNNLiar(INPUTS_SIZE = self.rnn_units, LAYER_UNITS = self.liar_setting, INPUTS_PARTS = 2)
         original_storyNend = T.concatenate([reasoner_result1, self.train_encodinglayer_vecs[5]], axis = 1)
 
         # self.alternative_end.shape = self.DNN_liar.output
