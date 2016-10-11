@@ -1,0 +1,24 @@
+#!/bin/bash
+
+#$ -S /bin/bash
+#$ -M jontsai@uchicago.edu
+#$ -N adv_margin
+#$ -m beasn
+#$ -r n
+#$ -o adv_margin.out
+#$ -e adv_margin.err
+#$ -cwd 
+
+SETTING1="300" 
+SETTING2="100"
+SETTING3="512x256"
+SETTING4="0.001"
+SETTING5="adam"
+
+export OMP_NUM_THREADS=2
+export OPENBLAS_NUM_THREADS=2
+echo "Start - `date`"
+/home-nfs/jontsai/anaconda/bin/python BLSTM_attention_adv_margin.py \
+$SETTING1 $SETTING2 $SETTING3 $SETTING4 $SETTING5
+echo "Finish - `date`"
+
