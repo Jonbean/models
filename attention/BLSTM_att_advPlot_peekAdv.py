@@ -277,7 +277,7 @@ class Hierachi_RNN(object):
         # Compute adam updates for training
 
         self.prediction = theano.function(self.inputs_variables + [self.vt_2nd_end] + self.inputs_masks + [self.vt_2nd_end_mask], [origi_score, vt_2nd_score])
-        self.adv_monitor = theano.function(self.inputs_variables + self.inputs_masks, [self.alternative_end])
+        self.adv_monitor = theano.function(self.inputs_variables + self.inputs_masks, self.alternative_end)
         # pydotprint(self.train_func, './computational_graph.png')
 
     def load_data(self):
@@ -561,7 +561,7 @@ class Hierachi_RNN(object):
             print "average speed: "+str(N_TRAIN_INS/(time.time() - start_time))+"instances/s "
             print "total main cost: "+str(total_main_cost)+''
             print "total liar cost: "+str(total_liar_cost)+''
-            print "======================================="
+            print "=======================================" 
             print "adversarial model monitor"
             self.adv_model_monitor()
             print "======================================="
