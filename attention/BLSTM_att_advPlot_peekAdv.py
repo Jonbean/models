@@ -296,6 +296,8 @@ class Hierachi_RNN(object):
         train_set = pickle.load(open(self.train_set_path))
         self.train_story = train_set[0]
         self.train_ending = train_set[1]
+        self.n_train = len(self.train_ending)
+
 
         val_set = pickle.load(open(self.val_set_path))
 
@@ -321,6 +323,11 @@ class Hierachi_RNN(object):
             self.wemb = theano.shared(pickle.load(open(self.wemb_matrix_path))).astype(theano.config.floatX)
 
         self.index2word_dict = pickle.load(open(self.index2word_dict_path))
+
+        self.peeked_ends_ls = np.random.randint(self.n_train, size=(5,))
+        self.ends_pool_ls = np.random.choice(range(self.n_train), 2000, replace = False)
+
+
     def fake_load_data(self):
         self.train_story = []
         self.train_story.append(np.concatenate((np.random.randint(10, size = (50, 10)), 10+np.random.randint(10, size=(50,10))),axis=0).astype('int64'))
@@ -433,8 +440,7 @@ class Hierachi_RNN(object):
 
     def adv_model_monitor(self):
         '''part I pass story to RNN reader and adv generator'''
-        self.n_train = len(self.train_ending)
-        stories_indices = np.random.randint(self.n_train, size=(5,))
+        stories_indices = self.peeked_ends_ls
         peek_story = [[self.train_story[index][i] for index in stories_indices] for i in range(1,self.story_nsent+1)]
         peek_ending = [self.train_ending[index] for index in stories_indices]
 
@@ -452,7 +458,7 @@ class Hierachi_RNN(object):
                                                        peek_story_mask[0], peek_story_mask[1], peek_story_mask[2],
                                                        peek_story_mask[3], peek_end_mask)
 
-        select_story_ls = np.random.choice(range(self.n_train), 1000, replace = False)
+        select_story_ls = self.ends_pool_ls
         random_check_ending = [self.train_ending[index] for index in select_story_ls]
         random_check_end_matrix = utils.padding(random_check_ending)
         random_check_end_mask = utils.mask_generator(random_check_ending)
@@ -477,7 +483,8 @@ class Hierachi_RNN(object):
         # cos_simi_matrix.shape = (1000, 5)
         cos_simi_matrix = dot_prod / norm_denominator_matrix
 
-        index_list = np.argmax(cos_simi_matrix, axis = 0)
+        index_list_inMatrix = np.argmax(cos_simi_matrix, axis = 0)
+        index_list = [stories_indices[i] for i in index_list_inMatrix]
         '''part III print out story and the most similar end correspondingly'''
         for i in range(5):
             index = stories_indices[i]
