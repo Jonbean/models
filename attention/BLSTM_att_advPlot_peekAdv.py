@@ -278,6 +278,17 @@ class Hierachi_RNN(object):
 
         self.prediction = theano.function(self.inputs_variables + [self.vt_2nd_end] + self.inputs_masks + [self.vt_2nd_end_mask], [origi_score, vt_2nd_score])
         self.adv_monitor = theano.function(self.inputs_variables + self.inputs_masks, self.alternative_end)
+
+        self.test_end_matrix = T.matrix('test_end', dtype='int64')
+        self.test_end_mask = T.matrix('test_end_mask', dtype=theano.config.floatX)
+
+
+        self.test_end_rep = lasagne.layers.get_output(self.encoder.output,
+                                                    {self.encoder.l_in:self.test_end_matrix, 
+                                                    self.encoder.l_mask:self.test_end_mask},
+                                                    deterministic = True)
+
+        self.end_rep_check = theano.function([self.test_end_matrix, self.test_end_mask], self.test_end_rep)
         # pydotprint(self.train_func, './computational_graph.png')
 
     def load_data(self):
@@ -440,19 +451,27 @@ class Hierachi_RNN(object):
                                                        peek_story_mask[0], peek_story_mask[1], peek_story_mask[2],
                                                        peek_story_mask[3], peek_end_mask)
 
-        '''part II calculate the most similar sent'''
-        end_rep_matrix = np.zeros((self.n_train, self.rnn_units))
-        wemb_matrix = self.wemb.get_value()
-        for i in range(self.n_train):
-            end_rep_matrix[i] = np.sum(wemb_matrix[self.train_ending[i]], axis = 0) / (len(self.train_ending[i]))
+        select_story_ls = np.random.randint(range(self.n_train), 1000, replace = False)
+        random_check_ending = [self.train_ending[index] for index in select_story_ls]
+        random_check_end_matrix = utils.padding(random_check_ending)
+        random_check_end_mask = utils.mask_generator(random_check_ending)
 
-        norm_end_rep_matrix = np.linalg.norm(end_rep_matrix, axis = 1).reshape(-1,1)
+        random_check_ending_rep = self.end_rep_check(random_check_end_matrix, random_check_end_mask)
+
+
+        '''part II calculate the most similar sent'''
+        # end_rep_matrix = np.zeros((self.n_train, self.rnn_units))
+        # wemb_matrix = self.wemb.get_value()
+        # for i in range(self.n_train):
+        #     end_rep_matrix[i] = np.sum(wemb_matrix[self.train_ending[i]], axis = 0) / (len(self.train_ending[i]))
+
+        norm_end_rep_matrix = np.linalg.norm(random_check_ending_rep, axis = 1).reshape(-1,1)
         norm_adv_end_rep = np.linalg.norm(adv_end_rep_batch, axis = 1).reshape(-1,1)
         # norm_denominator_matrix.shape = (45503, 5)
         norm_denominator_matrix = np.dot(norm_end_rep_matrix, norm_adv_end_rep.T)
 
         # dot_prod.shape = (45503, 5)
-        dot_prod = np.dot(end_rep_matrix, adv_end_rep_batch.T)
+        dot_prod = np.dot(random_check_ending_rep, adv_end_rep_batch.T)
 
         # cos_simi_matrix.shape = (45503, 5)
         cos_simi_matrix = dot_prod / norm_denominator_matrix
@@ -480,7 +499,6 @@ class Hierachi_RNN(object):
 
         '''init test'''
         print "initial test..."
-        self.adv_monitor()
         val_result = self.val_set_test()
         print "accuracy is: "+str(val_result*100) +"%"
         if val_result > best_val_accuracy:
