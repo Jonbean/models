@@ -287,8 +287,9 @@ class Hierachi_RNN(object):
                                                     {self.encoder.l_in:self.test_end_matrix, 
                                                     self.encoder.l_mask:self.test_end_mask},
                                                     deterministic = True)
+        check_end_representation = (self.test_end_rep * self.test_end_mask.dimshuffle(0,1,'x')).sum(axis = 1) / self.test_end_mask[4].sum(axis = 1, keepdims = True)
 
-        self.end_rep_check = theano.function([self.test_end_matrix, self.test_end_mask], self.test_end_rep)
+        self.end_rep_check = theano.function([self.test_end_matrix, self.test_end_mask], check_end_representation)
         # pydotprint(self.train_func, './computational_graph.png')
 
     def load_data(self):
@@ -467,13 +468,13 @@ class Hierachi_RNN(object):
 
         norm_end_rep_matrix = np.linalg.norm(random_check_ending_rep, axis = 1).reshape(-1,1)
         norm_adv_end_rep = np.linalg.norm(adv_end_rep_batch, axis = 1).reshape(-1,1)
-        # norm_denominator_matrix.shape = (45503, 5)
+        # norm_denominator_matrix.shape = (1000, 5)
         norm_denominator_matrix = np.dot(norm_end_rep_matrix, norm_adv_end_rep.T)
 
-        # dot_prod.shape = (45503, 5)
+        # dot_prod.shape = (1000, 5)
         dot_prod = np.dot(random_check_ending_rep, adv_end_rep_batch.T)
 
-        # cos_simi_matrix.shape = (45503, 5)
+        # cos_simi_matrix.shape = (1000, 5)
         cos_simi_matrix = dot_prod / norm_denominator_matrix
 
         index_list = np.argmax(cos_simi_matrix, axis = 0)
