@@ -287,7 +287,7 @@ class Hierachi_RNN(object):
                                                     {self.encoder.l_in:self.test_end_matrix, 
                                                     self.encoder.l_mask:self.test_end_mask},
                                                     deterministic = True)
-        check_end_representation = (self.test_end_rep * self.test_end_mask.dimshuffle(0,1,'x')).sum(axis = 1) / self.test_end_mask[4].sum(axis = 1, keepdims = True)
+        check_end_representation = (self.test_end_rep * self.test_end_mask.dimshuffle(0,1,'x')).sum(axis = 1) / self.test_end_mask.sum(axis = 1, keepdims = True)
 
         self.end_rep_check = theano.function([self.test_end_matrix, self.test_end_mask], check_end_representation)
         # pydotprint(self.train_func, './computational_graph.png')
