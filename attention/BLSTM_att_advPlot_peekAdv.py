@@ -480,6 +480,7 @@ class Hierachi_RNN(object):
 
         '''init test'''
         print "initial test..."
+        self.adv_monitor()
         val_result = self.val_set_test()
         print "accuracy is: "+str(val_result*100) +"%"
         if val_result > best_val_accuracy:
