@@ -484,7 +484,7 @@ class Hierachi_RNN(object):
         cos_simi_matrix = dot_prod / norm_denominator_matrix
 
         index_list_inMatrix = np.argmax(cos_simi_matrix, axis = 0)
-        index_list = [stories_indices[i] for i in index_list_inMatrix]
+        index_list = [select_story_ls[i] for i in index_list_inMatrix]
         '''part III print out story and the most similar end correspondingly'''
         for i in range(5):
             index = stories_indices[i]
