@@ -247,7 +247,7 @@ class Hierachi_RNN(object):
         # Construct symbolic cost function
         
 
-        cost1 = T.max(T.concatenate([T.zeros_like(origi_score), - origi_score + alter_score], axis = 1), axis = 1)
+        cost1 = T.max(T.concatenate([T.zeros_like(origi_score), - origi_score + alter_score + T.ones_like(origi_score)], axis = 1), axis = 1)
         # cost2 = 
         liar_cost = - alter_score 
 
@@ -283,6 +283,22 @@ class Hierachi_RNN(object):
 
         self.prediction = theano.function(self.inputs_variables + [self.vt_2nd_end] + self.inputs_masks + [self.vt_2nd_end_mask], [origi_score, vt_2nd_score])
         # pydotprint(self.train_func, './computational_graph.png')
+        self.adv_monitor = theano.function(self.inputs_variables + self.inputs_masks, self.alternative_end)
+
+        self.test_end_matrix = T.matrix('test_end', dtype='int64')
+        self.test_end_mask = T.matrix('test_end_mask', dtype=theano.config.floatX)
+
+
+        self.test_end_rep = lasagne.layers.get_output(self.encoder.output,
+                                                    {self.encoder.l_in:self.test_end_matrix, 
+                                                    self.encoder.l_mask:self.test_end_mask},
+                                                    deterministic = True)
+        check_end_representation = (self.test_end_rep * self.test_end_mask.dimshuffle(0,1,'x')).sum(axis = 1) / self.test_end_mask.sum(axis = 1, keepdims = True)
+
+        self.end_rep_check = theano.function([self.test_end_matrix, self.test_end_mask], check_end_representation)
+        # pydotprint(self.train_func, './computational_graph.png')
+
+
 
     def load_data(self):
         train_set = pickle.load(open(self.train_set_path))
@@ -421,6 +437,67 @@ class Hierachi_RNN(object):
 
 
         return correct/self.n_test
+        
+    def adv_model_monitor(self):
+        '''part I pass story to RNN reader and adv generator'''
+        stories_indices = self.peeked_ends_ls
+        peek_story = [[self.train_story[index][i] for index in stories_indices] for i in range(1,self.story_nsent+1)]
+        peek_ending = [self.train_ending[index] for index in stories_indices]
+
+        peek_story_matrices = [utils.padding(batch_sent) for batch_sent in peek_story]
+        peek_end_matrix = utils.padding(peek_ending)
+        # train_end2_matrix = utils.padding(end2)
+
+        peek_story_mask = [utils.mask_generator(batch_sent) for batch_sent in peek_story]
+        peek_end_mask = utils.mask_generator(peek_ending)
+        # train_end2_mask = utils.mask_generator(end2)
+
+
+        adv_end_rep_batch = self.adv_monitor(peek_story_matrices[0], peek_story_matrices[1], peek_story_matrices[2],
+                                                       peek_story_matrices[3], peek_end_matrix,
+                                                       peek_story_mask[0], peek_story_mask[1], peek_story_mask[2],
+                                                       peek_story_mask[3], peek_end_mask)
+
+
+        if np.all(adv_end_rep_batch[0] - adv_end_rep_batch[1] == 0):
+            print "WARNING!!! Same end rep for diff stories!"
+        select_story_ls = self.ends_pool_ls
+        random_check_ending = [self.train_ending[index] for index in select_story_ls]
+        random_check_end_matrix = utils.padding(random_check_ending)
+        random_check_end_mask = utils.mask_generator(random_check_ending)
+
+        random_check_ending_rep = self.end_rep_check(random_check_end_matrix, random_check_end_mask)
+
+
+        '''part II calculate the most similar sent'''
+        # end_rep_matrix = np.zeros((self.n_train, self.rnn_units))
+        # wemb_matrix = self.wemb.get_value()
+        # for i in range(self.n_train):
+        #     end_rep_matrix[i] = np.sum(wemb_matrix[self.train_ending[i]], axis = 0) / (len(self.train_ending[i]))
+
+        norm_end_rep_matrix = np.linalg.norm(random_check_ending_rep, axis = 1).reshape(-1,1)
+        norm_adv_end_rep = np.linalg.norm(adv_end_rep_batch, axis = 1).reshape(-1,1)
+        # norm_denominator_matrix.shape = (1000, 5)
+        norm_denominator_matrix = np.dot(norm_end_rep_matrix, norm_adv_end_rep.T)
+
+        # dot_prod.shape = (1000, 5)
+        dot_prod = np.dot(random_check_ending_rep, adv_end_rep_batch.T)
+
+        # cos_simi_matrix.shape = (1000, 5)
+        cos_simi_matrix = dot_prod / norm_denominator_matrix
+
+        index_list_inMatrix = np.argmax(cos_simi_matrix, axis = 0)
+        index_list = [select_story_ls[i] for i in index_list_inMatrix]
+        '''part III print out story and the most similar end correspondingly'''
+        for i in range(5):
+            index = stories_indices[i]
+            story_string = " | ".join([" ".join([self.index2word_dict[self.train_story[index][j][k]] for k in range(len(self.train_story[index][j]))]) for j in range(5)])
+            story_end = " ".join([self.index2word_dict[self.train_ending[index][k]] for k in range(len(self.train_ending[index]))])
+            generated_end = " ".join([self.index2word_dict[self.train_ending[index_list[i]][k]] for k in range(len(self.train_ending[index_list[i]]))])
+
+            print story_string + " #END# " + story_end
+            print "adv model generated: " + generated_end
+
 
 
     def begin_train(self):
