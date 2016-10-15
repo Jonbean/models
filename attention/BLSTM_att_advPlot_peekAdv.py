@@ -458,6 +458,9 @@ class Hierachi_RNN(object):
                                                        peek_story_mask[0], peek_story_mask[1], peek_story_mask[2],
                                                        peek_story_mask[3], peek_end_mask)
 
+
+        if np.all(adv_end_rep_batch[0] - adv_end_rep_batch[1] == 0):
+            print "WARNING!!! Same end rep for diff stories!"
         select_story_ls = self.ends_pool_ls
         random_check_ending = [self.train_ending[index] for index in select_story_ls]
         random_check_end_matrix = utils.padding(random_check_ending)
