@@ -598,7 +598,7 @@ def main(argv):
     wemb_size = None
     if len(argv) > 6:
         wemb_size = argv[6]
-    model = Hierachi_RNN(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5] wemb_size)
+    model = Hierachi_RNN(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5], wemb_size)
 
     print "loading data"
     model.load_data()
