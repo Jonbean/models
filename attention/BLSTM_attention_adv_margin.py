@@ -18,7 +18,7 @@ import sys
 
 
 class Hierachi_RNN(object):
-    def __init__(self, rnn_setting, batchsize, liar_setting, learning_rate, optimizer, wemb_size = None):
+    def __init__(self, rnn_setting, batchsize, liar_setting, learning_rate, optimizer, delta, wemb_size = None):
         # Initialize Theano Symbolic variable attributes
         self.story_input_variable = None
         self.story_mask = None
@@ -41,6 +41,7 @@ class Hierachi_RNN(object):
 
         # self.val_split_ratio = float(val_split_ratio)
         self.words_num = 28820
+        self.delta = float(delta)
 
         self.wemb_size = 300
         if wemb_size == None:
@@ -247,7 +248,7 @@ class Hierachi_RNN(object):
         # Construct symbolic cost function
         
 
-        cost1 = T.max(T.concatenate([T.zeros_like(origi_score), - origi_score + alter_score + T.ones_like(origi_score)], axis = 1), axis = 1)
+        cost1 = T.max(T.concatenate([T.zeros_like(origi_score), - origi_score + alter_score + self.delta * T.ones_like(origi_score)], axis = 1), axis = 1)
         # cost2 = 
         liar_cost = - alter_score 
 
@@ -437,7 +438,7 @@ class Hierachi_RNN(object):
 
 
         return correct/self.n_test
-        
+
     def adv_model_monitor(self):
         '''part I pass story to RNN reader and adv generator'''
         stories_indices = self.peeked_ends_ls
@@ -459,8 +460,7 @@ class Hierachi_RNN(object):
                                                        peek_story_mask[3], peek_end_mask)
 
 
-        if np.all(adv_end_rep_batch[0] - adv_end_rep_batch[1] == 0):
-            print "WARNING!!! Same end rep for diff stories!"
+
         select_story_ls = self.ends_pool_ls
         random_check_ending = [self.train_ending[index] for index in select_story_ls]
         random_check_end_matrix = utils.padding(random_check_ending)
@@ -598,9 +598,9 @@ class Hierachi_RNN(object):
 
 def main(argv):
     wemb_size = None
-    if len(argv) > 5:
-        wemb_size = argv[5]
-    model = Hierachi_RNN(argv[0], argv[1], argv[2], argv[3], argv[4], wemb_size)
+    if len(argv) > 6:
+        wemb_size = argv[6]
+    model = Hierachi_RNN(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5], wemb_size)
 
     print "loading data"
     model.load_data()

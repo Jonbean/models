@@ -18,7 +18,7 @@ import sys
 
 
 class Hierachi_RNN(object):
-    def __init__(self, rnn_setting, batchsize, liar_setting, learning_rate, optimizer, wemb_size = None):
+    def __init__(self, rnn_setting, batchsize, liar_setting, learning_rate, optimizer, delta, wemb_size = None):
         # Initialize Theano Symbolic variable attributes
         self.story_input_variable = None
         self.story_mask = None
@@ -41,6 +41,7 @@ class Hierachi_RNN(object):
 
         # self.val_split_ratio = float(val_split_ratio)
         self.words_num = 28820
+        self.delta = float(delta)
 
         self.wemb_size = 300
         if wemb_size == None:
@@ -247,7 +248,7 @@ class Hierachi_RNN(object):
         # Construct symbolic cost function
         
 
-        cost1 = T.max(T.concatenate([T.zeros_like(origi_score), - origi_score + alter_score + T.ones_like(origi_score)], axis = 1), axis = 1)
+        cost1 = T.max(T.concatenate([T.zeros_like(origi_score), - origi_score + alter_score + self.delta * T.ones_like(origi_score)], axis = 1), axis = 1)
         # cost2 = 
         liar_cost = - alter_score 
 
@@ -595,9 +596,9 @@ class Hierachi_RNN(object):
 
 def main(argv):
     wemb_size = None
-    if len(argv) > 5:
-        wemb_size = argv[5]
-    model = Hierachi_RNN(argv[0], argv[1], argv[2], argv[3], argv[4], wemb_size)
+    if len(argv) > 6:
+        wemb_size = argv[6]
+    model = Hierachi_RNN(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5] wemb_size)
 
     print "loading data"
     model.load_data()
