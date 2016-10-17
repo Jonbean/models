@@ -2,11 +2,11 @@
 
 #$ -S /bin/bash
 #$ -M jontsai@uchicago.edu
-#$ -N AdvMargDelt05
+#$ -N AdvMargDelt1NoN
 #$ -m beasn
 #$ -r n
-#$ -o AdvMargDelt05.out
-#$ -e AdvMargDelt05.err
+#$ -o AdvMargDelt1NoN.out
+#$ -e AdvMargDelt1NoN.err
 #$ -cwd 
 
 SETTING1="300" 
@@ -14,8 +14,8 @@ SETTING2="100"
 SETTING3="512x256"
 SETTING4="0.001"
 SETTING5="adam"
-SETTING6="0.5"
-SETTING7="default"
+SETTING6="1.0"
+SETTING7="None"
 
 export OMP_NUM_THREADS=2
 export OPENBLAS_NUM_THREADS=2

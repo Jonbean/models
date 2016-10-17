@@ -18,7 +18,7 @@ import sys
 
 
 class Hierachi_RNN(object):
-    def __init__(self, rnn_setting, batchsize, liar_setting, learning_rate, optimizer, delta, wemb_size = None):
+    def __init__(self, rnn_setting, batchsize, liar_setting, learning_rate, optimizer, delta, score_func_nonlin = 'default',wemb_size = None):
         # Initialize Theano Symbolic variable attributes
         self.story_input_variable = None
         self.story_mask = None
@@ -52,7 +52,10 @@ class Hierachi_RNN(object):
 
         self.train_story = None
         self.train_ending = None
-
+        if score_func_nonlin == 'default':
+            self.score_func_nonlin = lasagne.nonlinearities.tanh
+        if score_func_nonlin == 'None'
+            self.score_func_nonlin = None
 
         self.optimizer = optimizer
 
@@ -212,7 +215,7 @@ class Hierachi_RNN(object):
         l_concate = lasagne.layers.ConcatLayer([l_story_in, l_end_in], axis = 1)
 
         l_hid = lasagne.layers.DenseLayer(l_concate, num_units=1,
-                                          nonlinearity=lasagne.nonlinearities.tanh)
+                                          nonlinearity=self.score_func_nonlin)
 
         final_class_param = lasagne.layers.get_all_params(l_hid)
 
@@ -252,8 +255,8 @@ class Hierachi_RNN(object):
         # cost2 = 
         liar_cost = - alter_score 
 
-        self.main_cost = lasagne.objectives.aggregate(cost1, mode = 'sum')
-        self.liar_cost = lasagne.objectives.aggregate(liar_cost, mode = 'sum')
+        self.main_cost = lasagne.objectives.aggregate(cost1, mode = 'mean')
+        self.liar_cost = lasagne.objectives.aggregate(liar_cost, mode = 'mean')
 
         # Retrieve all parameters from the network
         main_params = self.encoder.all_params + self.sent_encoder.all_params + final_class_param + [self.bilinear_attention_matrix]
@@ -386,18 +389,8 @@ class Hierachi_RNN(object):
             # Answer denotes the index of the anwer
             prediction = np.argmax(np.concatenate((score1, score2), axis=1))
             # predict_seq.append(prediction)
-            predict_answer = 0
-            if prediction == 0:
-                predict_answer = 1
-            elif prediction == 1:
-                predict_answer = 0
-            elif prediction == 2:
-                predict_answer = 0
-            else:
-                predict_answer = 1
 
-            if predict_answer == self.val_answer[i]:
-                correct += 1.
+            correct += np.sum(abs(prediction - self.val_answer))
 
 
         return correct/self.n_val
@@ -423,19 +416,7 @@ class Hierachi_RNN(object):
             # Answer denotes the index of the anwer
             prediction = np.argmax(np.concatenate((score1, score2), axis=1))
 
-            predict_answer = 0
-            if prediction == 0:
-                predict_answer = 1
-            elif prediction == 1:
-                predict_answer = 0
-            elif prediction == 2:
-                predict_answer = 0
-            else:
-                predict_answer = 1
-
-            if predict_answer == self.test_answer[i]:
-                correct += 1.
-
+            correct += np.sum(abs(prediction - self.test_answer))
 
         return correct/self.n_test
 
@@ -593,14 +574,15 @@ class Hierachi_RNN(object):
             print "average speed: "+str(N_TRAIN_INS/(time.time() - start_time))+"instances/s "
             print "total main cost: "+str(total_main_cost)
             print "total liar cost: "+str(total_liar_cost)
+            self.adv_model_monitor()
             print "======================================="
 
 
 def main(argv):
     wemb_size = None
-    if len(argv) > 6:
-        wemb_size = argv[6]
-    model = Hierachi_RNN(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5], wemb_size)
+    if len(argv) > 7:
+        wemb_size = argv[7]
+    model = Hierachi_RNN(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5], argv[6],wemb_size)
 
     print "loading data"
     model.load_data()
