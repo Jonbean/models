@@ -54,7 +54,7 @@ class Hierachi_RNN(object):
         self.train_ending = None
         if score_func_nonlin == 'default':
             self.score_func_nonlin = lasagne.nonlinearities.tanh
-        if score_func_nonlin == 'None'
+        if score_func_nonlin == 'None':
             self.score_func_nonlin = None
 
         self.optimizer = optimizer
