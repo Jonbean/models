@@ -395,7 +395,7 @@ class Hierachi_RNN(object):
             prediction = np.argmax(np.concatenate((score1, score2), axis=1))
             # predict_seq.append(prediction)
 
-            correct += np.sum(abs(prediction - self.val_answer))
+            correct += abs(prediction - self.val_answer[i])
 
 
         return correct/self.n_val
@@ -421,7 +421,7 @@ class Hierachi_RNN(object):
             # Answer denotes the index of the anwer
             prediction = np.argmax(np.concatenate((score1, score2), axis=1))
 
-            correct += np.sum(abs(prediction - self.test_answer))
+            correct += abs(prediction - self.test_answer[i])
 
         return correct/self.n_test
 
@@ -496,6 +496,7 @@ class Hierachi_RNN(object):
         batch_count = 0.0
         start_batch = 0.0
 
+        max_batch = N_TRAIN_INS/N_BATCH
         '''init test'''
         print "initial test..."
         val_result = self.val_set_test()
@@ -513,7 +514,6 @@ class Hierachi_RNN(object):
             print "epoch "+str(epoch)+":"
             shuffled_index_list = utils.shuffle_index(N_TRAIN_INS)
 
-            max_batch = N_TRAIN_INS/N_BATCH
 
             start_time = time.time()
 
@@ -583,8 +583,8 @@ class Hierachi_RNN(object):
             print "======================================="
             print "epoch summary:"
             print "average speed: "+str(N_TRAIN_INS/(time.time() - start_time))+"instances/s "
-            print "total main cost: "+str(total_main_cost)
-            print "total liar cost: "+str(total_liar_cost)
+            print "total main cost: "+str(total_main_cost/max_batch)
+            print "total liar cost: "+str(total_liar_cost/max_batch)
             self.adv_model_monitor()
             print "======================================="
 
