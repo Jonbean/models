@@ -84,6 +84,9 @@ class Hierachi_RNN(object):
         self.attentioned_sent_rep2 = []
         self.bilinear_attention_matrix = theano.shared(0.02*np.random.rand(self.rnn_units, self.rnn_units) - 0.01)
 
+        self.peeked_ends_ls = np.random.randint(self.n_train, size=(5,))
+        self.ends_pool_ls = np.random.choice(range(self.n_train), 2000, replace = False)
+        
     def encoding_layer(self):
 
 
