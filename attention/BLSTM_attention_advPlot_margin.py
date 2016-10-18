@@ -308,7 +308,8 @@ class Hierachi_RNN(object):
         train_set = pickle.load(open(self.train_set_path))
         self.train_story = train_set[0]
         self.train_ending = train_set[1]
-
+        self.n_train = len(self.train_ending)
+        
         val_set = pickle.load(open(self.val_set_path))
 
         self.val_story = val_set[0]
