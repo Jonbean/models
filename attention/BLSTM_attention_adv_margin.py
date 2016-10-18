@@ -33,6 +33,7 @@ class Hierachi_RNN(object):
         self.test_set_path = '../../data/pickles/test_index_corpus.pkl' 
         self.train_set_path = '../../data/pickles/train_index_corpus.pkl'
         self.wemb_matrix_path = '../../data/pickles/index_wemb_matrix.pkl'
+        self.index2word_dict_path = '../../data/pickles/ROC_train_index_dict.pkl'
 
         self.rnn_units = int(rnn_setting)
         self.liar_setting = [int(elem) for elem in liar_setting.split('x')]
@@ -334,6 +335,7 @@ class Hierachi_RNN(object):
             self.wemb = theano.shared(pickle.load(open(self.wemb_matrix_path))).astype(theano.config.floatX)
         self.peeked_ends_ls = np.random.randint(self.n_train, size=(5,))
         self.ends_pool_ls = np.random.choice(range(self.n_train), 2000, replace = False)
+        self.index2word_dict = pickle.load(open(self.index2word_dict_path))
         
     def fake_load_data(self):
         self.train_story = []
@@ -537,6 +539,12 @@ class Hierachi_RNN(object):
                                                                train_story_matrices[3], train_end_matrix,
                                                                train_story_mask[0], train_story_mask[1], train_story_mask[2],
                                                                train_story_mask[3], train_end_mask)
+
+                if epoch == 0 and batch == 1:
+                    print "origin score shape: ", prediction1.shape
+                    print "adv score shape: ", prediction2.shape
+                    print "score pairs: "
+                    print np.concatenate((prediction1, prediction2), axis = 1)
 
 
 
