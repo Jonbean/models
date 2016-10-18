@@ -33,7 +33,7 @@ class Hierachi_RNN(object):
         self.test_set_path = '../../data/pickles/test_index_corpus.pkl' 
         self.train_set_path = '../../data/pickles/train_index_corpus.pkl'
         self.wemb_matrix_path = '../../data/pickles/index_wemb_matrix.pkl'
-        self.index2word_dict_path = '../../data/pickles/ROC_train_index_corpus.pkl'
+        self.index2word_dict_path = '../../data/pickles/ROC_train_index_dict.pkl'
 
         self.rnn_units = int(rnn_setting)
         self.liar_setting = [int(elem) for elem in liar_setting.split('x')]
