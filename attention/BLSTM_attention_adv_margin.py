@@ -540,7 +540,7 @@ class Hierachi_RNN(object):
                                                                train_story_mask[0], train_story_mask[1], train_story_mask[2],
                                                                train_story_mask[3], train_end_mask)
 
-                if epoch == 0 and batch == 1:
+                if epoch % 5 == 0 and batch == 1:
                     print "origin score shape: ", prediction1.shape
                     print "adv score shape: ", prediction2.shape
                     print "score pairs: "
