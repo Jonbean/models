@@ -471,7 +471,8 @@ class Hierachi_RNN(object):
                                                        peek_story_matrices[3], peek_end_matrix,
                                                        peek_story_mask[0], peek_story_mask[1], peek_story_mask[2],
                                                        peek_story_mask[3], peek_end_mask)
-        print adv_end_rep_batch
+        randone = np.random.randint(5)
+        print adv_end_rep_batch[randone]
 
         if np.all(adv_end_rep_batch[0] - adv_end_rep_batch[1] == 0):
             print "WARNING!!! Same end rep for diff stories!"
