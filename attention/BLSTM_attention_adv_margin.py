@@ -493,7 +493,6 @@ class Hierachi_RNN(object):
         best_val_accuracy = 0
         best_test_accuracy = 0
         test_threshold = 10000/N_BATCH
-        batch_count = 0.0
         start_batch = 0.0
 
         max_batch = N_TRAIN_INS/N_BATCH
@@ -561,7 +560,7 @@ class Hierachi_RNN(object):
                 total_liar_cost += liar_cost
 
 
-                if batch_count % test_threshold == 0 and batch_count != 0:
+                if batch % test_threshold == 0 and batch != 0:
                     print "error rate on training set: "+ str((total_err_count * 1.0)/((batch + 1) * N_BATCH)*100.0)+"%"
 
                     print "test on val set..."
@@ -578,7 +577,6 @@ class Hierachi_RNN(object):
 
                     total_err_count = 0.0
 
-                batch_count += 1
 
             print "======================================="
             print "epoch summary:"
