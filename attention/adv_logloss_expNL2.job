@@ -20,6 +20,6 @@ export OMP_NUM_THREADS=2
 export OPENBLAS_NUM_THREADS=2
 echo "Start - `date`"
 /home-nfs/jontsai/anaconda/bin/python BLSTM_att_advPlot_expNear.py \
-$SETTING1 $SETTING2 $SETTING3 SETTING4 SETTING5 SETTING6
+$SETTING1 $SETTING2 $SETTING3 $SETTING4 $SETTING5 $SETTING6
 echo "Finish - `date`"
 
