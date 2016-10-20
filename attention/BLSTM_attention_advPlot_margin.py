@@ -486,6 +486,7 @@ class Hierachi_RNN(object):
             print " #END# " + story_end
             print ""
             print "Adv Model Generated: " + generated_end
+            print ""
 
 
     def begin_train(self):
