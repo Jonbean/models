@@ -1,0 +1,25 @@
+#!/bin/bash
+
+#$ -S /bin/bash
+#$ -M jontsai@uchicago.edu
+#$ -N adv_LogNL2_1
+#$ -m beasn
+#$ -r n
+#$ -o adv_LogNL2_1.out
+#$ -e adv_LogNL2_1.err
+#$ -cwd 
+
+SETTING1="300" 
+SETTING2="150"
+SETTING3="512x256"
+SETTING4="0.001"
+SETTING5="adam"
+SETTING6="L2" 
+
+export OMP_NUM_THREADS=2
+export OPENBLAS_NUM_THREADS=2
+echo "Start - `date`"
+/home-nfs/jontsai/anaconda/bin/python BLSTM_att_advPlot_expNear.py \
+$SETTING1 $SETTING2 $SETTING3 $SETTING4 $SETTING5 $SETTING6
+echo "Finish - `date`"
+
