@@ -262,8 +262,8 @@ class Hierachi_RNN(object):
             constraint = T.batched_dot(self.train_encodinglayer_vecs[-1], self.alternative_end) / norm_matrix
         '''========================================================'''
 
-        self.main_cost = lasagne.objectives.aggregate(cost1+cost2, mode = 'sum')
-        self.liar_cost = lasagne.objectives.aggregate(liar_cost, mode = 'sum')
+        self.main_cost = lasagne.objectives.aggregate(cost1+cost2, mode = 'mean')
+        self.liar_cost = lasagne.objectives.aggregate(liar_cost, mode = 'mean')
 
         # Retrieve all parameters from the network
         main_params = self.encoder.all_params + self.sent_encoder.all_params + final_class_param + [self.bilinear_attention_matrix]
@@ -512,18 +512,18 @@ class Hierachi_RNN(object):
             story_end = " ".join([self.index2word_dict[self.train_ending[index][k]] for k in range(len(self.train_ending[index]))])
             generated_end = " ".join([self.index2word_dict[self.train_ending[index_list[i]][k]] for k in range(len(self.train_ending[index_list[i]]))])
 
-            print story_string + " #END# " + story_end
-            print "adv model generated: " + generated_end
+            print story_string 
+            print " #END# " + story_end
+            print ""
+            print "Adv Model Generated: " + generated_end
             
     def begin_train(self):
         N_EPOCHS = 100
         N_BATCH = self.batchsize
-        N_TRAIN_INS = len(self.train_ending)
+        N_TRAIN_INS = int(len(self.train_ending))
         best_val_accuracy = 0
         best_test_accuracy = 0
-        test_threshold = 10000/N_BATCH
-        batch_count = 0.0
-        start_batch = 0.0
+        test_threshold = int(10000)/N_BATCH
 
         '''init test'''
         print "initial test..."
@@ -584,7 +584,7 @@ class Hierachi_RNN(object):
                 total_liar_cost += liar_cost
 
 
-                if batch_count % test_threshold == 0 and batch_count != 0:
+                if batch % test_threshold == 0 and batch != 0:
                     print "error rate on training set: "+ str((total_err_count * 1.0)/((batch + 1) * N_BATCH)*100.0)+"%"
 
                     print "test on val set..."
@@ -599,15 +599,14 @@ class Hierachi_RNN(object):
                         if test_accuracy > best_test_accuracy:
                             best_test_accuracy = test_accuracy
 
-                    total_err_count = 0.0
 
-                batch_count += 1
 
             print "======================================="
             print "epoch summary:"
             print "average speed: "+str(N_TRAIN_INS/(time.time() - start_time))+"instances/s "
-            print "total main cost: "+str(total_main_cost)+''
-            print "total liar cost: "+str(total_liar_cost)+''
+            print "total main cost: "+str(total_main_cost/max_batch)+''
+            print "total liar cost: "+str(total_liar_cost/max_batch)+''
+            print "err rate for this epoch: "+str((total_err_count/(max_batch * N_BATCH)) * 100.0)+"%"
             print "=======================================" 
             print "adversarial model monitor"
             self.adv_model_monitor()

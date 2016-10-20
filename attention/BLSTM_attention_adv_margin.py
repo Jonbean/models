@@ -482,19 +482,20 @@ class Hierachi_RNN(object):
             story_end = " ".join([self.index2word_dict[self.train_ending[index][k]] for k in range(len(self.train_ending[index]))])
             generated_end = " ".join([self.index2word_dict[self.train_ending[index_list[i]][k]] for k in range(len(self.train_ending[index_list[i]]))])
 
-            print story_string + " #END# " + story_end
-            print "adv model generated: " + generated_end
+            print story_string 
+            print " #END# " + story_end
+            print ""
+            print "Adv Model Generated: " + generated_end
 
 
 
     def begin_train(self):
         N_EPOCHS = 100
         N_BATCH = self.batchsize
-        N_TRAIN_INS = len(self.train_ending)
+        N_TRAIN_INS = int(len(self.train_ending))
         best_val_accuracy = 0
         best_test_accuracy = 0
-        test_threshold = 10000/N_BATCH
-        start_batch = 0.0
+        test_threshold = int(10000)/N_BATCH
 
         max_batch = N_TRAIN_INS/N_BATCH
         '''init test'''
@@ -519,7 +520,7 @@ class Hierachi_RNN(object):
 
             total_main_cost = 0.0
             total_liar_cost = 0.0
-            total_err_count = 0.0
+            total_correct_count = 0.0
 
             for batch in range(max_batch):
                 batch_index_list = [shuffled_index_list[i] for i in range(batch * N_BATCH, (batch+1) * N_BATCH)]
@@ -540,30 +541,19 @@ class Hierachi_RNN(object):
                                                                train_story_mask[0], train_story_mask[1], train_story_mask[2],
                                                                train_story_mask[3], train_end_mask)
 
-                if epoch % 5 == 0 and batch == 1:
-                    print "origin score shape: ", prediction1.shape
-                    print "adv score shape: ", prediction2.shape
-                    print "score pairs: "
-                    print np.concatenate((prediction1, prediction2), axis = 1)
 
 
 
                 prediction = np.argmax(np.concatenate((prediction1, prediction2), axis = 1), axis = 1)
-                predict_answer = np.zeros((N_BATCH, ))
-                for i in range(N_BATCH):
-                    if prediction[i] == 0:
-                        predict_answer[i] = 1
-                    else:
-                        predict_answer[i] = 0
 
-                total_err_count += predict_answer.sum()
+                total_correct_count += (N_BATCH - prediction.sum())
                 total_main_cost += main_cost
                 total_liar_cost += liar_cost
 
 
                 if batch % test_threshold == 0 and batch != 0:
-                    print "error rate on training set: "+ str((total_err_count * 1.0)/((batch + 1) * N_BATCH)*100.0)+"%"
-
+                    print "accuracy on training set: "+ str((total_correct_count* 1.0)/((batch + 1) * N_BATCH)*100.0)+"%"
+                    
                     print "test on val set..."
                     val_result = self.val_set_test()
                     print "accuracy is: "+str(val_result*100)+"%"
@@ -576,14 +566,14 @@ class Hierachi_RNN(object):
                         if test_accuracy > best_test_accuracy:
                             best_test_accuracy = test_accuracy
 
-                    total_err_count = 0.0
-
+                    print np.concatenate((prediction1, prediction2), axis = 1)
 
             print "======================================="
             print "epoch summary:"
             print "average speed: "+str(N_TRAIN_INS/(time.time() - start_time))+"instances/s "
             print "total main cost: "+str(total_main_cost/max_batch)
             print "total liar cost: "+str(total_liar_cost/max_batch)
+            print "accuracy for this epoch: "+str(total_correct_count/(max_batch * N_BATCH) * 100.0)+"%"
             self.adv_model_monitor()
             print "======================================="
 
