@@ -39,7 +39,7 @@ class Hierachi_RNN(object):
         self.liar_setting = [int(elem) for elem in liar_setting.split('x')]
         # self.dropout_rate = float(dropout_rate)
         self.batchsize = int(batchsize)
-
+        self.classifier_hid1 = 1024
         # self.val_split_ratio = float(val_split_ratio)
         self.words_num = 28820
         self.delta = float(delta)
@@ -216,8 +216,8 @@ class Hierachi_RNN(object):
         l_story_in = lasagne.layers.InputLayer(shape=(None, self.rnn_units))
         l_end_in = lasagne.layers.InputLayer(shape = (None, self.rnn_units))
         l_concate = lasagne.layers.ConcatLayer([l_story_in, l_end_in], axis = 1)
-
-        l_hid = lasagne.layers.DenseLayer(l_concate, num_units=1,
+        l_hid1 = lasagne.layers.DenseLayer(l_concate, num_units = self.classifier_hid1, nonlinearity=lasagne.nonlinearities.tanh)
+        l_hid = lasagne.layers.DenseLayer(l_hid1, num_units=1,
                                           nonlinearity=self.score_func_nonlin)
 
         final_class_param = lasagne.layers.get_all_params(l_hid)
