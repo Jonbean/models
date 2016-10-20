@@ -210,7 +210,7 @@ class Hierachi_RNN(object):
         l_story_in = lasagne.layers.InputLayer(shape=(None, self.rnn_units))
         l_end_in = lasagne.layers.InputLayer(shape = (None, self.rnn_units))
         l_concate = lasagne.layers.ConcatLayer([l_story_in, l_end_in], axis = 1)
-        l_hid_1 = lasagne.layers.DenseLayer(l_concate, num_units=2,
+        l_hid_1 = lasagne.layers.DenseLayer(l_concate, num_units=1024,
                                           nonlinearity=lasagne.nonlinearities.tanh)
 
         l_hid = lasagne.layers.DenseLayer(l_hid_1, num_units=2,
