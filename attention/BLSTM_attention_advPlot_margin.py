@@ -18,14 +18,15 @@ import sys
 
 
 class Hierachi_RNN(object):
-    def __init__(self, rnn_setting, batchsize, liar_setting, learning_rate, optimizer, delta, score_func_nonlin = 'default', wemb_size = None):
+    def __init__(self, rnn_setting, batchsize, liar_setting, learning_rate1, learning_rate2, optimizer, delta, score_func_nonlin = 'default', wemb_trainable = True, wemb_size = None):
         # Initialize Theano Symbolic variable attributes
         self.story_input_variable = None
         self.story_mask = None
         self.story_nsent = 4
 
         self.cost = None
-        self.learning_rate = float(learning_rate)
+        self.learning_rate1 = float(learning_rate1)
+        self.learning_rate2 = float(learning_rate2)
         self.train_func = None
         # Initialize data loading attributes
         self.wemb = None
@@ -47,6 +48,8 @@ class Hierachi_RNN(object):
             self.score_func_nonlin = lasagne.nonlinearities.tanh
         else:
             self.score_func_nonlin = None
+
+        self.wemb_trainable = wemb_trainable
 
         self.wemb_size = 300
         if wemb_size == None:
@@ -158,7 +161,7 @@ class Hierachi_RNN(object):
             self.reshaped_inputs_variables.append(self.inputs_variables[i].reshape([batch_size, seqlen, 1]))
 
         #initialize neural network units
-        self.encoder = BLSTM_sequence.BlstmEncoder(LSTMLAYER_1_UNITS = self.rnn_units)
+        self.encoder = BLSTM_sequence.BlstmEncoder(LSTMLAYER_1_UNITS = self.rnn_units, wemb_trainable = self.wemb_trainable)
         self.encoder.build_model(self.wemb)
 
         #build encoding layer
@@ -270,12 +273,12 @@ class Hierachi_RNN(object):
         liar_updates = None
 
         if self.optimizer == 'adam':
-            main_updates = lasagne.updates.adam(self.main_cost, main_params, learning_rate=self.learning_rate)
+            main_updates = lasagne.updates.adam(self.main_cost, main_params, learning_rate=self.learning_rate1)
 
-            liar_updates = lasagne.updates.adam(self.liar_cost, liar_params, learning_rate=self.learning_rate)
+            liar_updates = lasagne.updates.adam(self.liar_cost, liar_params, learning_rate=self.learning_rate2)
         else:
-            main_updates = lasagne.updates.momentum(self.main_cost, main_params, learning_rate=self.learning_rate, momentum=0.9)
-            liar_updates = lasagne.updates.momentum(self.liar_cost, liar_params, learning_rate=self.learning_rate, momentum=0.9)
+            main_updates = lasagne.updates.momentum(self.main_cost, main_params, learning_rate=self.learning_rate1, momentum=0.9)
+            liar_updates = lasagne.updates.momentum(self.liar_cost, liar_params, learning_rate=self.learning_rate2, momentum=0.9)
         # all_updates = lasagne.updates.momentum(self.cost, all_params, learning_rate = 0.05, momentum=0.9)
 
         all_updates = []
@@ -577,9 +580,9 @@ class Hierachi_RNN(object):
 
 def main(argv):
     wemb_size = None
-    if len(argv) > 7:
-        wemb_size = argv[7]
-    model = Hierachi_RNN(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5], argv[6], wemb_size)
+    if len(argv) > 8:
+        wemb_size = argv[8]
+    model = Hierachi_RNN(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5], argv[6], argv[7], wemb_size)
 
     print "loading data"
     model.load_data()
