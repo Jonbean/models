@@ -42,7 +42,7 @@ class BlstmEncoder(object):
 
         # The embedding layers with retieve subtensor from word embedding matrix
         l_emb = lasagne.layers.EmbeddingLayer(self.l_in, input_size=self.wemb.get_value().shape[0], output_size=self.wemb.get_value().shape[1], W=self.wemb)
-        if !self.wemb_trainable:
+        if not self.wemb_trainable:
             l_emb.params[l_emb.W].remove('trainable')
             
         # l_drop = lasagne.layers.DropoutLayer(l_emb, p = self.dropout_rate)
