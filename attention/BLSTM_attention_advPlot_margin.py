@@ -18,7 +18,9 @@ import sys
 
 
 class Hierachi_RNN(object):
-    def __init__(self, rnn_setting, batchsize, liar_setting, learning_rate1, learning_rate2, optimizer, delta, score_func_nonlin = 'default', wemb_trainable = True, wemb_size = None):
+    def __init__(self, rnn_setting, batchsize, liar_setting, 
+                learning_rate1, learning_rate2, optimizer, delta, 
+                score_func_nonlin = 'default', wemb_trainable = 1, wemb_size = None):
         # Initialize Theano Symbolic variable attributes
         self.story_input_variable = None
         self.story_mask = None
@@ -49,7 +51,7 @@ class Hierachi_RNN(object):
         else:
             self.score_func_nonlin = None
 
-        self.wemb_trainable = wemb_trainable
+        self.wemb_trainable = bool(int(wemb_trainable))
 
         self.wemb_size = 300
         if wemb_size == None:
@@ -580,9 +582,9 @@ class Hierachi_RNN(object):
 
 def main(argv):
     wemb_size = None
-    if len(argv) > 8:
-        wemb_size = argv[8]
-    model = Hierachi_RNN(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5], argv[6], argv[7], wemb_size)
+    if len(argv) > 9:
+        wemb_size = argv[9]
+    model = Hierachi_RNN(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5], argv[6], argv[7], argv[8],wemb_size)
 
     print "loading data"
     model.load_data()
