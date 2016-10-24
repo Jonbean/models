@@ -2,11 +2,11 @@
 
 #$ -S /bin/bash
 #$ -M jontsai@uchicago.edu
-#$ -N AdvMargDelt1
+#$ -N AdvMargDelt1WembFix
 #$ -m beasn
 #$ -r n
-#$ -o AdvMargDelt1.out
-#$ -e AdvMargDelt1.err
+#$ -o AdvMargDelt1WembFix.out
+#$ -e AdvMargDelt1WembFix.err
 #$ -cwd 
 
 SETTING1="300" 
