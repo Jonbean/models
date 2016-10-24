@@ -1,0 +1,23 @@
+#!/bin/bash
+#$ -S /bin/bash
+#$ -M jontsai@uchicago.edu
+#$ -N AdvPlotMargLR12
+#$ -m beasn
+#$ -o AdvPlotMargLR12.out
+#$ -e AdvPlotMargLR12.err
+#$ -r n
+#$ -cwd 
+SETTING1="300" 
+SETTING2="100"
+SETTING3="512x512"
+SETTING4=0.0005
+SETTING5=0.0001
+SETTING5="adam" 
+SETTING6="1.0" 
+SETTING7="default"
+SETTING8="0"
+export OMP_NUM_THREADS=2
+export OPENBLAS_NUM_THREADS=2
+echo "Start - `date`"/home-nfs/jontsai/anaconda/bin/python BLSTM_attention_advPlot_margin.py \
+$SETTING1 $SETTING2 $SETTING3 $SETTING4 $SETTING5 $SETTING6 $SETTING7 $SETTING8 $SETTING9
+echo "End - `date`"
