@@ -12,10 +12,10 @@ SETTING2="100"
 SETTING3="512x512"
 SETTING4=0.0015
 SETTING5=0.0001
-SETTING5="adam" 
-SETTING6="1.0" 
-SETTING7="default"
-SETTING8="0"
+SETTING6="adam" 
+SETTING7="1.0" 
+SETTING8="default"
+SETTING9="0"
 export OMP_NUM_THREADS=2
 export OPENBLAS_NUM_THREADS=2
 echo "Start - `date`"/home-nfs/jontsai/anaconda/bin/python BLSTM_attention_adv_margin.py \
