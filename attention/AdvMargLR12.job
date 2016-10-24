@@ -18,6 +18,6 @@ SETTING7="default"
 SETTING8="0"
 export OMP_NUM_THREADS=2
 export OPENBLAS_NUM_THREADS=2
-echo "Start - `date`"/home-nfs/jontsai/anaconda/bin/python BLSTM_attention_adver.py \
+echo "Start - `date`"/home-nfs/jontsai/anaconda/bin/python BLSTM_attention_adv_margin.py \
 $SETTING1 $SETTING2 $SETTING3 $SETTING4 $SETTING5 $SETTING6 $SETTING7 $SETTING8 $SETTING9
 echo "End - `date`"
