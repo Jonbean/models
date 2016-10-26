@@ -18,7 +18,7 @@ import sys
 
 
 class Hierachi_RNN(object):
-    def __init__(self, rnn_setting, batchsize, liar_setting, 
+    def __init__(self, rnn_setting, val_split_ratio, D_batchsize, G_batchsize, liar_setting, 
                 learning_rate1, learning_rate2, optimizer, delta, 
                 score_func_nonlin = 'default', wemb_trainable = 1, wemb_size = None):
         # Initialize Theano Symbolic variable attributes
@@ -41,7 +41,8 @@ class Hierachi_RNN(object):
         self.rnn_units = int(rnn_setting)
         self.liar_setting = [int(elem) for elem in liar_setting.split('x')]
         # self.dropout_rate = float(dropout_rate)
-        self.batchsize = int(batchsize)
+        self.D_batchsize = int(D_batchsize)
+        self.G_batchsize = int(G_batchsize)
 
         self.val_split_ratio = float(val_split_ratio)
 
@@ -233,7 +234,7 @@ class Hierachi_RNN(object):
         '''========================================================'''
         '''               generator training graph                 '''
         '''========================================================'''
-        euclidien_distance = T.sqrt(T.sum(T.sqr(self.alternative_end - reasoner_result1), axis = 1), axis = 1)
+        euclidien_distance = T.sqrt(T.sum(T.sqr(self.alternative_end - reasoner_result1), axis = 1))
 
         '''========================================================'''
         '''                    generating score                    '''
@@ -298,7 +299,7 @@ class Hierachi_RNN(object):
         # combine two sets of parameters update into a single OrderedDict 
         self.classifier_train_func = theano.function(self.inputs_variables + self.inputs_masks, 
                                         [self.main_cost, origi_score, alter_score], updates = main_updates)
-        self.generator_train_func = theano.function(self.inputs_variables + self.inputs_masks, [self.liar_cost], updates = liar_updates)
+        self.generator_train_func = theano.function(self.inputs_variables + self.inputs_masks, self.liar_cost, updates = liar_updates)
         # Compute adam updates for training
 
         self.prediction = theano.function(self.inputs_variables + [self.vt_2nd_end] + self.inputs_masks + [self.vt_2nd_end_mask], [origi_score, vt_2nd_score])
@@ -417,9 +418,6 @@ class Hierachi_RNN(object):
                                        story_mask[3], ending1_mask, ending2_mask)
 
             # Answer denotes the index of the anwer
-            prediction = np.argmax(prob)
-
-
             prediction = np.argmax(np.concatenate((score1, score2), axis=1))
 
             correct += abs(prediction - self.val_answer[i])
@@ -517,7 +515,7 @@ class Hierachi_RNN(object):
     def generator_train(self, epochs):
         print "generator training begin.."
         N_EPOCHS = epochs
-        N_BATCH = self.batchsize
+        N_BATCH = self.G_batchsize
         N_TRAIN_INS = self.val_train_n
         
         for epoch in range(N_EPOCHS):
@@ -541,11 +539,11 @@ class Hierachi_RNN(object):
                 answer = np.asarray([self.val_answer[index] for index in batch_index_list])
 
                 end = []
-                for ans in answer:
-                    if ans == 0:
-                        end.append(end2)
+                for i in range(N_BATCH):
+                    if answer[i] == 0:
+                        end.append(end2[i])
                     else:
-                        end.append(end1)
+                        end.append(end1[i])
 
                 train_story_matrices = [utils.padding(batch_sent) for batch_sent in train_story]
                 train_end_matrix = utils.padding(end)
@@ -554,7 +552,7 @@ class Hierachi_RNN(object):
                 train_end_mask = utils.mask_generator(end)
                 
 
-                cost =  self.train_func(train_story_matrices[0], train_story_matrices[1], train_story_matrices[2],
+                cost =  self.generator_train_func(train_story_matrices[0], train_story_matrices[1], train_story_matrices[2],
                                         train_story_matrices[3], train_end_matrix,
                                         train_story_mask[0], train_story_mask[1], train_story_mask[2],
                                         train_story_mask[3], train_end_mask)
@@ -566,7 +564,7 @@ class Hierachi_RNN(object):
 
     def begin_train(self):
         N_EPOCHS = 100
-        N_BATCH = self.batchsize
+        N_BATCH = self.D_batchsize
         N_TRAIN_INS = int(len(self.train_ending))
         best_val_accuracy = 0
         best_test_accuracy = 0
@@ -611,7 +609,7 @@ class Hierachi_RNN(object):
                 # train_end2_mask = utils.mask_generator(end2)
 
 
-                main_cost, liar_cost, prediction1, prediction2 = self.classifier_train_func(train_story_matrices[0], train_story_matrices[1], train_story_matrices[2],
+                main_cost, prediction1, prediction2 = self.classifier_train_func(train_story_matrices[0], train_story_matrices[1], train_story_matrices[2],
                                                                train_story_matrices[3], train_end_matrix,
                                                                train_story_mask[0], train_story_mask[1], train_story_mask[2],
                                                                train_story_mask[3], train_end_mask)
@@ -619,7 +617,6 @@ class Hierachi_RNN(object):
                 prediction = np.argmax(np.concatenate((prediction1, prediction2), axis = 1), axis = 1)
                 total_correct_count += (N_BATCH - prediction.sum())
                 total_main_cost += main_cost
-                total_liar_cost += liar_cost
 
 
                 if batch % test_threshold == 0 and batch != 0:
@@ -651,7 +648,6 @@ class Hierachi_RNN(object):
             print "epoch summary:"
             print "average speed: "+str(N_TRAIN_INS/(time.time() - start_time))+"instances/s "
             print "total main cost: "+str(total_main_cost/max_batch)
-            print "total liar cost: "+str(total_liar_cost/max_batch)
             print "accuracy for this epoch: "+str(total_correct_count/(max_batch * N_BATCH) * 100.0)+"%"
             self.adv_model_monitor()
             print "======================================="
@@ -660,9 +656,9 @@ class Hierachi_RNN(object):
 
 def main(argv):
     wemb_size = None
-    if len(argv) > 9:
-        wemb_size = argv[9]
-    model = Hierachi_RNN(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5], argv[6], argv[7], argv[8],wemb_size)
+    if len(argv) > 10:
+        wemb_size = argv[10]
+    model = Hierachi_RNN(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5], argv[6], argv[7], argv[8],argv[9], wemb_size)
 
     print "loading data"
     model.load_data()
