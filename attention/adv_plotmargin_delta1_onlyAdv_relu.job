@@ -2,11 +2,11 @@
 
 #$ -S /bin/bash
 #$ -M jontsai@uchicago.edu
-#$ -N adv_LogNcos_1
+#$ -N adv_PlotMarg_onlyRelu_1
 #$ -m beasn
 #$ -r n
-#$ -o adv_LogNcos_1.out
-#$ -e adv_LogNcos_1.err
+#$ -o adv_PlotMarg_onlyRelu_1.out
+#$ -e adv_PlotMarg_onlyRelu_1.err
 #$ -cwd 
 
 SETTING1="300" 
