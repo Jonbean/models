@@ -656,9 +656,9 @@ class Hierachi_RNN(object):
 
 def main(argv):
     wemb_size = None
-    if len(argv) > 10:
-        wemb_size = argv[10]
-    model = Hierachi_RNN(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5], argv[6], argv[7], argv[8],argv[9], wemb_size)
+    if len(argv) > 11:
+        wemb_size = argv[11]
+    model = Hierachi_RNN(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5], argv[6], argv[7], argv[8], argv[9], argv[10], wemb_size)
 
     print "loading data"
     model.load_data()
