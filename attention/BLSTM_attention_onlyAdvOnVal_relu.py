@@ -8,7 +8,7 @@ import utils
 import cPickle as pickle
 import BLSTM_sequence
 import BLSTM_last
-import DNN_liar_relu
+import DNN_liar_relu as DNN_liar
 from theano.tensor.shared_randomstreams import RandomStreams
 
 import sys

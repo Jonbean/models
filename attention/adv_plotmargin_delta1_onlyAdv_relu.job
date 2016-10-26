@@ -1,0 +1,27 @@
+#!/bin/bash
+
+#$ -S /bin/bash
+#$ -M jontsai@uchicago.edu
+#$ -N adv_LogNcos_1
+#$ -m beasn
+#$ -r n
+#$ -o adv_LogNcos_1.out
+#$ -e adv_LogNcos_1.err
+#$ -cwd 
+
+SETTING1="300" 
+SETTING2="0.8"
+SETTING3="512x512"
+SETTING4="0.001"
+SETTING5="0.0005"
+SETTING6="adam"
+SETTING7="1.0"
+SETTING8="None"
+SETTING9="0" 
+
+export OMP_NUM_THREADS=2
+export OPENBLAS_NUM_THREADS=2
+echo "Start - `date`"
+/home-nfs/jontsai/anaconda/bin/python BLSTM_attention_onlyAdvOnVal_relu.py \
+$SETTING1 $SETTING2 $SETTING3 $SETTING4 $SETTING5 $SETTING6 $SETTING7 $SETTING8 $SETTING9
+echo "Finish - `date`"
