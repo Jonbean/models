@@ -20,5 +20,5 @@ class DNNLiar(object):
                                         nonlinearity=lasagne.nonlinearities.rectify))
 
 
-        self.output = lasagne.layers.DenseLayer(self.hidden_layers[-1], self.inputs_size)
+        self.output = lasagne.layers.DenseLayer(self.hidden_layers[-1], self.inputs_size, nonlinearity=lasagne.nonlinearities.tanh)
         self.all_params = lasagne.layers.get_all_params(self.output)
