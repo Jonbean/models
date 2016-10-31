@@ -13,7 +13,7 @@ import sys
 
 
 class Hierachi_RNN(object):
-    def __init__(self, rnn_setting, dropout_rate, batchsize, wemb_size = None):
+    def __init__(self, rnn_setting, dropout_rate, batchsize, delta, learning_rate = 0.001, wemb_trainable = '1', wemb_size = None):
         # Initialize Theano Symbolic variable attributes
         self.story_input_variable = None
         self.story_mask = None
@@ -49,6 +49,8 @@ class Hierachi_RNN(object):
         # self.mlp_units = [int(elem) for elem in mlp_setting.split('x')]
         self.dropout_rate = float(dropout_rate)
         self.batchsize = int(batchsize)
+        self.learning_rate = float(learning_rate)
+        self.wemb_trainable = bool(int(wemb_trainable))
         # self.reasoning_depth = int(reasoning_depth)
         self.wemb_size = 300
         if wemb_size == None:
@@ -73,30 +75,21 @@ class Hierachi_RNN(object):
         self.n_test = None
 
         self.train_encodinglayer_vecs = []
-        self.test_encodinglayer_vecs = []
-        self.reasoninglayer_vec1 = []
-        self.reasoninglayer_vec2 = []
-        self.reasoninglayer_vec1_test = []
-        self.reasoninglayer_vec2_test = []
-        self.reasoning_pool_results = []
-        self.reasoning_pool_results_test = []
-        self.reasoners = []
 
-        self.delta = 5.0
+
+        self.delta = float(delta)
 
     def encoding_layer(self):
 
 
         assert len(self.reshaped_inputs_variables)==len(self.inputs_masks)
         for i in range(self.story_nsent+1):
-            self.train_encodinglayer_vecs.append(lasagne.layers.get_output(self.encoder.output,
+            sent_seq = lasagne.layers.get_output(self.encoder.output,
                                                         {self.encoder.l_in:self.reshaped_inputs_variables[i], 
                                                          self.encoder.l_mask:self.inputs_masks[i]},
-                                                         deterministic = True))
+                                                         deterministic = True)
 
-            # self.test_encodinglayer_vecs.append(lasagne.layers.get_output(self.encoder.output,{self.encoder.l_in:self.reshaped_inputs_variables[i], 
-            #                                              self.encoder.l_mask:self.inputs_masks[i]},deterministic = True))
-           
+            self.train_encodinglayer_vecs.append((sent_seq * self.inputs_masks[i].dimshuffle(0,1,'x')).sum(axis = 1) / self.inputs_masks[i].sum(axis = 1, keepdims = True))         
 
     def model_constructor(self, wemb_size = None):
         self.inputs_variables = []
@@ -109,7 +102,7 @@ class Hierachi_RNN(object):
             self.reshaped_inputs_variables.append(self.inputs_variables[i].reshape([batch_size, seqlen, 1]))
 
         #initialize neural network units
-        self.encoder = BGRU_Encoder.BGRUEncoder(LAYER_1_UNITS = self.rnn_units, dropout_rate = self.dropout_rate)
+        self.encoder = BGRU_Encoder.BGRUEncoder(LAYER_1_UNITS = self.rnn_units, dropout_rate = self.dropout_rate, wemb_trainable =self.wemb_trainable)
         self.encoder.build_model(self.wemb)
 
         #build encoding layer
@@ -146,7 +139,9 @@ class Hierachi_RNN(object):
         # we cache the encoded result to pick the max score negative sample from them later
         l_concate = lasagne.layers.ConcatLayer([l_story_in, l_end_in], axis = 1)
 
-        l_hid = lasagne.layers.DenseLayer(l_concate, num_units=1, nonlinearity=lasagne.nonlinearities.tanh)
+        l_hid1 = lasagne.layers.DenseLayer(l_concate, num_units = 1024, nonlinearity = lasagne.nonlinearities.tanh)
+
+        l_hid = lasagne.layers.DenseLayer(l_hid1, num_units=1, nonlinearity=None)
 
         final_class_param = lasagne.layers.get_all_params(l_hid)
 
@@ -180,7 +175,7 @@ class Hierachi_RNN(object):
         # Retrieve all parameters from the network
         all_params = self.encoder.all_params + reasoner_params + final_class_param
 
-        all_updates = lasagne.updates.adam(self.cost, all_params, learning_rate=0.001)
+        all_updates = lasagne.updates.adam(self.cost, all_params, learning_rate=self.learning_rate)
         # all_updates = lasagne.updates.momentum(self.cost, all_params, learning_rate = 0.05, momentum=0.9)
 
         self.train_func = theano.function(self.inputs_variables + self.inputs_masks, 
@@ -193,9 +188,10 @@ class Hierachi_RNN(object):
         batch_size, seqlen = end2.shape
         end2_reshape = end2.reshape([batch_size, seqlen, 1])
 
-        encoded_end2 = lasagne.layers.get_output(self.encoder.output, {self.encoder.l_in: end2_reshape, 
+        encoded_end2_seq = lasagne.layers.get_output(self.encoder.output, {self.encoder.l_in: end2_reshape, 
                                                                        self.encoder.l_mask:mask_end2},
                                                                        deterministic = True)
+        encoded_end2 = (encoded_end2_seq * mask_end2.dimshuffle(0,1,'x')).sum(axis = 1) / mask_end2.sum(axis = 1, keepdims = True)
         self.score2 = lasagne.layers.get_output(l_hid, {l_story_in: reasoner_result, 
                                                    l_end_in: encoded_end2})
 
@@ -230,40 +226,6 @@ class Hierachi_RNN(object):
             self.wemb = theano.shared(wemb).astype(theano.config.floatX)
         else:
             self.wemb = theano.shared(pickle.load(open(self.wemb_matrix_path))).astype(theano.config.floatX)
-
-    def fake_load_data(self):
-        self.train_story = []
-        self.train_story.append(np.concatenate((np.random.randint(10, size = (50, 10)), 10+np.random.randint(10, size=(50,10))),axis=0).astype('int64'))
-        self.train_story.append(np.ones((100, 10)).astype('int64'))
-        self.train_story.append(np.ones((100, 10)).astype('int64'))
-        self.train_story.append(np.ones((100, 10)).astype('int64'))
-        self.train_story = np.asarray(self.train_story).reshape([100,4,10])
-
-        self.train_ending = np.concatenate((2 * np.ones((50, 5)), np.ones((50, 5))), axis = 0)
-        self.val_story = []
-        self.val_story.append(np.random.randint(10, size = (100, 10)).astype('int64'))
-        self.val_story.append(np.random.randint(10, size = (100, 10)).astype('int64'))
-        self.val_story.append(np.random.randint(10, size = (100, 10)).astype('int64'))
-        self.val_story.append(np.random.randint(10, size = (100, 10)).astype('int64'))
-
-        self.val_ending1 = np.ones((100, 10)).astype('int64')
-        self.val_ending2 = 2*np.ones((100, 10)).astype('int64')
-        self.val_answer = np.zeros(100)
-        self.n_val = self.val_answer.shape[0]
-
-        self.test_story = []
-        self.test_story.append(np.random.randint(20, size = (100, 10)).astype('int64'))
-        self.test_story.append(np.random.randint(20, size = (100, 10)).astype('int64'))
-        self.test_story.append(np.random.randint(20, size = (100, 10)).astype('int64'))
-        self.test_story.append(np.random.randint(20, size = (100, 10)).astype('int64'))
-
-        self.test_ending1 = np.ones((100, 10)).astype('int64')
-        self.test_ending2 = 2*np.ones((100, 10)).astype('int64')
-        self.test_answer = np.ones(100)
-        self.n_test = self.test_answer.shape[0]
-
-
-        self.wemb = theano.shared(np.random.rand(30, self.rnn_units)).astype(theano.config.floatX)
 
 
     def val_set_test(self):
@@ -352,7 +314,6 @@ class Hierachi_RNN(object):
         best_val_accuracy = 0
         best_test_accuracy = 0
         test_threshold = 10000/N_BATCH
-        batch_count = 0.0
         start_batch = 0.0
 
         '''init test'''
@@ -403,8 +364,9 @@ class Hierachi_RNN(object):
                 total_correct_count = np.count_nonzero((score1 - score2).clip(0.0))
 
                 total_cost += cost
-                if batch_count % test_threshold == 0 and batch_count != 0:
+                if batch % test_threshold == 0 and batch != 0:
                     print "accuracy on training set: ", total_correct_count/((batch+1) * N_BATCH)*100.0, "%"
+                    print np.concatenate([score1.reshape(-1,1), score2.reshape(-1,1)], axis=1)
 
                     print "test on val set..."
                     val_result = self.val_set_test()
@@ -418,7 +380,6 @@ class Hierachi_RNN(object):
                         if test_accuracy > best_test_accuracy:
                             best_test_accuracy = test_accuracy
 
-                batch_count += 1
             print "======================================="
             print "epoch summary:"
             print "average cost in this epoch: ", total_cost
@@ -439,9 +400,9 @@ class Hierachi_RNN(object):
 
 def main(argv):
     wemb_size = None
-    if len(argv) > 3:
-        wemb_size = argv[3]
-    model = Hierachi_RNN(argv[0], argv[1], argv[2], wemb_size)
+    if len(argv) > 6:
+        wemb_size = argv[6]
+    model = Hierachi_RNN(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5], wemb_size)
 
     print "loading data"
     model.load_data()

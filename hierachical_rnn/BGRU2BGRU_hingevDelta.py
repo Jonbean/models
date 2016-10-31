@@ -73,14 +73,6 @@ class Hierachi_RNN(object):
         self.n_test = None
 
         self.train_encodinglayer_vecs = []
-        self.test_encodinglayer_vecs = []
-        self.reasoninglayer_vec1 = []
-        self.reasoninglayer_vec2 = []
-        self.reasoninglayer_vec1_test = []
-        self.reasoninglayer_vec2_test = []
-        self.reasoning_pool_results = []
-        self.reasoning_pool_results_test = []
-        self.reasoners = []
 
         self.delta = 5.0
 
