@@ -1,0 +1,26 @@
+#!/bin/bash
+#$ -S /bin/bash
+#$ -M jontsai@uchicago.edu
+#$ -N AdvValPlotMarg
+#$ -m beasn
+#$ -o AdvValPlotMarg.out
+#$ -e AdvValPlotMarg.err
+#$ -r n
+#$ -cwd 
+SETTING1="300"
+SETTING2="0.8"
+SETTING3="150"
+SETTING4="100"
+SETTING5="512x512"
+SETTING6="0.0015"
+SETTING7="0.0015"
+SETTING8="sgd" 
+SETTING9="1.0" 
+SETTING10="default"
+SETTING11="0"
+export OMP_NUM_THREADS=2
+export OPENBLAS_NUM_THREADS=2
+echo "Start - `date`"
+/home-nfs/jontsai/anaconda/bin/python BLSTM_attention_onlyAdvOnval.py \
+$SETTING1 $SETTING2 $SETTING3 $SETTING4 $SETTING5 $SETTING6 $SETTING7 $SETTING8 $SETTING9 $SETTING10 $SETTING11
+echo "End - `date`"
