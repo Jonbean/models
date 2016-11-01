@@ -21,6 +21,6 @@ SETTING11="0"
 export OMP_NUM_THREADS=2
 export OPENBLAS_NUM_THREADS=2
 echo "Start - `date`"
-/home-nfs/jontsai/anaconda/bin/python BLSTM_attention_onlyAdvOnval.py \
+/home-nfs/jontsai/anaconda/bin/python BLSTM_attention_onlyAdvOnVal.py \
 $SETTING1 $SETTING2 $SETTING3 $SETTING4 $SETTING5 $SETTING6 $SETTING7 $SETTING8 $SETTING9 $SETTING10 $SETTING11
 echo "End - `date`"
