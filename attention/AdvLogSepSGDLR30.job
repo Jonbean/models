@@ -1,0 +1,26 @@
+#!/bin/bash
+#$ -S /bin/bash
+#$ -M jontsai@uchicago.edu
+#$ -N AdvLogSepSGDLR30
+#$ -m beasn
+#$ -o AdvLogSepSGDLR30.out
+#$ -e AdvLogSepSGDLR30.err
+#$ -r n
+#$ -cwd 
+SETTING1="300" 
+SETTING2="0.8"
+SETTING3="150"
+SETTING4="100"
+SETTING5="512x512"
+SETTING6="0.0002"
+SETTING7="0.002"
+SETTING8="sgd" 
+SETTING9="default"
+SETTING10="0"
+SETTING11="0.01"
+export OMP_NUM_THREADS=2
+export OPENBLAS_NUM_THREADS=2
+echo "Start - `date`"
+/home-nfs/jontsai/anaconda/bin/python BLSTM_att_onlyAdvOnVal.py \
+$SETTING1 $SETTING2 $SETTING3 $SETTING4 $SETTING5 $SETTING6 $SETTING7 $SETTING8 $SETTING9 $SETTING10 $SETTING11
+echo "End - `date`"
