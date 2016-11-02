@@ -1,10 +1,10 @@
 #!/bin/bash
 #$ -S /bin/bash
 #$ -M jontsai@uchicago.edu
-#$ -N AdvMargLR11
+#$ -N AdvLogSepAdamLR11
 #$ -m beasn
-#$ -o AdvMargLR11.out
-#$ -e AdvMargLR11.err
+#$ -o AdvLogSepAdamLR11.out
+#$ -e AdvLogSepAdamLR11.err
 #$ -r n
 #$ -cwd 
 SETTING1="300" 
