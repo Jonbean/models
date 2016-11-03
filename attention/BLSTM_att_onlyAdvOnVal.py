@@ -660,7 +660,7 @@ class Hierachi_RNN(object):
                     '''train the generator again once discriminator is strong enough'''
                     '''============================================================='''
                     if current_train_accuracy >= 99.0:
-                        self.generator_train(10)
+                        self.generator_train()
                         
             print "======================================="
             print "epoch summary:"
