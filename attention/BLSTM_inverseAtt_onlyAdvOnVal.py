@@ -148,8 +148,8 @@ class Hierachi_RNN(object):
         self.inputs_variables = []
         self.inputs_masks = []
         self.reshaped_inputs_variables = []
-        self.vt_2nd_end = T.matrix('second_end', dtype='int64')
-        # self.vt_2nd_end = self.vt_2nd_end_in.reshape([self.vt_2nd_end_in.shape[0], self.vt_2nd_end_in.shape[1],1])
+        self.vt_2nd_end_in = T.matrix('second_end', dtype='int64')
+        self.vt_2nd_end = self.vt_2nd_end_in.reshape([self.vt_2nd_end_in.shape[0], self.vt_2nd_end_in.shape[1],1])
         self.vt_2nd_end_mask = T.matrix('second_end_mask', dtype=theano.config.floatX)
 
         for i in range(self.story_nsent+1):
