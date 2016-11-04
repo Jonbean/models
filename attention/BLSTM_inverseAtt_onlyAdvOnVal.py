@@ -19,7 +19,7 @@ import sys
 
 class Hierachi_RNN(object):
     def __init__(self, rnn_setting, val_split_ratio, D_batchsize, G_batchsize, liar_setting, 
-                learning_rate1, learning_rate2, optimizer, 
+                learning_rate1, learning_rate2, optimizer1, optimizer2, 
                 score_func_nonlin = 'default', wemb_trainable = 1, generator_halt_threshold = 0.1, wemb_size = None):
         # Initialize Theano Symbolic variable attributes
         self.story_input_variable = None
@@ -69,7 +69,9 @@ class Hierachi_RNN(object):
         self.train_ending = None
 
 
-        self.optimizer = optimizer
+        self.optimizer1 = optimizer1
+        self.optimizer2 = optimizer2
+
 
         self.val_story = None
         self.val_ending1 = None 
@@ -251,12 +253,13 @@ class Hierachi_RNN(object):
         main_updates = None
         liar_updates = None
 
-        if self.optimizer == 'adam':
+        if self.optimizer1 == 'adam':
             main_updates = lasagne.updates.adam(self.main_cost, main_params, learning_rate=self.learning_rate1)
-
-            liar_updates = lasagne.updates.adam(self.liar_cost, liar_params, learning_rate=self.learning_rate2)
         else:
             main_updates = lasagne.updates.momentum(self.main_cost, main_params, learning_rate=self.learning_rate1, momentum=0.9)
+        if self.optimizer2 == 'adam':
+            liar_updates = lasagne.updates.adam(self.liar_cost, liar_params, learning_rate=self.learning_rate2)
+        else:
             liar_updates = lasagne.updates.momentum(self.liar_cost, liar_params, learning_rate=self.learning_rate2, momentum=0.9)
         # all_updates = lasagne.updates.momentum(self.cost, all_params, learning_rate = 0.05, momentum=0.9)
 
@@ -496,7 +499,8 @@ class Hierachi_RNN(object):
         generator_cost = 100.0
 
         while generator_cost > self.generator_halt_threshold:
-
+            if epoch >= 30:
+                break
             print "epoch ", epoch,":"
             shuffled_index_list = self.val_train_ls
             np.random.shuffle(shuffled_index_list)
@@ -627,7 +631,7 @@ class Hierachi_RNN(object):
                     '''train the generator again once discriminator is strong enough'''
                     '''============================================================='''
                     if current_train_accuracy >= 99.0:
-                        self.generator_train(10)
+                        self.generator_train()
                         
             print "======================================="
             print "epoch summary:"
@@ -641,10 +645,10 @@ class Hierachi_RNN(object):
 
 def main(argv):
     wemb_size = None
-    if len(argv) > 11:
-        wemb_size = argv[11]
+    if len(argv) > 12:
+        wemb_size = argv[12]
     model = Hierachi_RNN(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5], argv[6], argv[7], argv[8],argv[9], 
-                         argv[10], wemb_size)
+                         argv[10], argv[11], wemb_size)
 
     print "loading data"
     model.load_data()

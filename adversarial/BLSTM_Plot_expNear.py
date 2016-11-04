@@ -7,6 +7,7 @@ import time
 import utils
 import cPickle as pickle
 import BLSTM_sequence
+import BLSTM_last
 import DNN_liar
 
 import sys
@@ -90,8 +91,8 @@ class Hierachi_RNN(object):
             sent_seq = lasagne.layers.get_output(self.encoder.output,
                                                         {self.encoder.l_in:self.reshaped_inputs_variables[i], 
                                                          self.encoder.l_mask:self.inputs_masks[i]},
-                                                         deterministic = True))
-            self.train_encodinglayer_vecs.append(sent_seq * self.inputs_masks[i].dimshuffle(0,1,'x')).sum(axis = 1) / self.inputs_masks[i].sum(axis = 1, keepdims = True))
+                                                         deterministic = True)
+            self.train_encodinglayer_vecs.append((sent_seq * self.inputs_masks[i].dimshuffle(0,1,'x')).sum(axis = 1) / self.inputs_masks[i].sum(axis = 1, keepdims = True))
 
 
         self.current_Nbatch = self.train_encodinglayer_vecs[0].shape[0]
@@ -187,7 +188,7 @@ class Hierachi_RNN(object):
                                                    l_end_in: self.alternative_end})
         '''========================================================'''
 
-        vt_2nd_score = lasagne.layers.get_output(l_hid, {l_story_in: reasoner_result2, 
+        vt_2nd_score = lasagne.layers.get_output(l_hid, {l_story_in: reasoner_result1, 
                                                    l_end_in: self.vt_2nd_end_repr})
 
         prob1 = lasagne.nonlinearities.softmax(origi_score)
@@ -218,7 +219,7 @@ class Hierachi_RNN(object):
         self.liar_cost = lasagne.objectives.aggregate(liar_cost+constraint, mode = 'mean')
 
         # Retrieve all parameters from the network
-        main_params = self.encoder.all_params + self.sent_encoder.all_params + final_class_param + [self.bilinear_attention_matrix]
+        main_params = self.encoder.all_params + self.sent_encoder.all_params + final_class_param 
 
         liar_params = self.DNN_liar.all_params
 
@@ -245,7 +246,7 @@ class Hierachi_RNN(object):
         # Compute adam updates for training
 
         self.prediction = theano.function(self.inputs_variables + [self.vt_2nd_end] + self.inputs_masks + [self.vt_2nd_end_mask], [origi_score, vt_2nd_score])
-        self.adv_monitor = theano.function(self.inputs_variables + self.inputs_masks, self.alternative_end)
+        self.adv_monitor = theano.function(self.inputs_variables[:-1] + self.inputs_masks[:-1], self.alternative_end)
 
         self.test_end_matrix = T.matrix('test_end', dtype='int64')
         self.test_end_mask = T.matrix('test_end_mask', dtype=theano.config.floatX)
@@ -422,9 +423,9 @@ class Hierachi_RNN(object):
 
 
         adv_end_rep_batch = self.adv_monitor(peek_story_matrices[0], peek_story_matrices[1], peek_story_matrices[2],
-                                                       peek_story_matrices[3], peek_end_matrix,
+                                                       peek_story_matrices[3],
                                                        peek_story_mask[0], peek_story_mask[1], peek_story_mask[2],
-                                                       peek_story_mask[3], peek_end_mask)
+                                                       peek_story_mask[3])
         randone = np.random.randint(5)
         print adv_end_rep_batch[randone]
 
