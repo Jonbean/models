@@ -136,7 +136,7 @@ class Hierachi_RNN(object):
 
         attention_score_tensor = T.batched_dot(bili_part1, self.plot_rep)
 
-        numerator = self.vt_2nd_end_mask[4] * T.exp(attention_score_tensor - attention_score_tensor.max(axis = 1, keepdims = True))
+        numerator = self.vt_2nd_end_mask * T.exp(attention_score_tensor - attention_score_tensor.max(axis = 1, keepdims = True))
     
         attention_weight_matrix = numerator / numerator.sum(axis = 1, keepdims = True)
 
@@ -148,8 +148,8 @@ class Hierachi_RNN(object):
         self.inputs_variables = []
         self.inputs_masks = []
         self.reshaped_inputs_variables = []
-        self.vt_2nd_end_in = T.matrix('second_end', dtype='int64')
-        self.vt_2nd_end = self.vt_2nd_end_in.reshape([self.vt_2nd_end_in.shape[0], self.vt_2nd_end_in.shape[1],1])
+        self.vt_2nd_end = T.matrix('second_end', dtype='int64')
+        # self.vt_2nd_end = self.vt_2nd_end_in.reshape([self.vt_2nd_end_in.shape[0], self.vt_2nd_end_in.shape[1],1])
         self.vt_2nd_end_mask = T.matrix('second_end_mask', dtype=theano.config.floatX)
 
         for i in range(self.story_nsent+1):
@@ -270,7 +270,7 @@ class Hierachi_RNN(object):
         self.generator_train_func = theano.function(self.inputs_variables + self.inputs_masks, self.liar_cost, updates = liar_updates, on_unused_input='ignore')
         # Compute adam updates for training
 
-        self.prediction = theano.function(self.inputs_variables + [self.vt_2nd_end] + self.inputs_masks + [self.vt_2nd_end_mask], [origi_score, vt_2nd_score])
+        self.prediction = theano.function(self.inputs_variables + [self.vt_2nd_end_in] + self.inputs_masks + [self.vt_2nd_end_mask], [origi_score, vt_2nd_score])
 
         self.adv_monitor = theano.function(self.inputs_variables + self.inputs_masks, self.alternative_end, on_unused_input='ignore')
 
@@ -393,7 +393,7 @@ class Hierachi_RNN(object):
                 pred = 1
 
             if pred == self.val_answer[i]:
-                correct += 1
+                correct += 1.0
 
         return correct/self.val_test_n
 
@@ -412,8 +412,8 @@ class Hierachi_RNN(object):
             ending2_mask = np.ones((1, len(self.test_ending2[i])))
 
             score1, score2 = self.prediction(story[0], story[1], story[2], story[3], 
-                                                       ending1, ending2, story_mask[0], story_mask[1], story_mask[2],
-                                                       story_mask[3], ending1_mask, ending2_mask)
+                                             ending1, ending2, story_mask[0], story_mask[1], story_mask[2],
+                                             story_mask[3], ending1_mask, ending2_mask)
             
             # Answer denotes the index of the anwer
             prediction = np.argmax(np.concatenate((score1, score2), axis=1))
@@ -422,7 +422,7 @@ class Hierachi_RNN(object):
                 pred = 1
 
             if pred == self.test_answer[i]:
-                correct += 1
+                correct += 1.0
         return correct/self.n_test
 
     def adv_model_monitor(self):
