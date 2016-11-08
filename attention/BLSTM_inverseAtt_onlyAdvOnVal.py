@@ -20,7 +20,7 @@ import sys
 class Hierachi_RNN(object):
     def __init__(self, rnn_setting, val_split_ratio, D_batchsize, G_batchsize, liar_setting, 
                 learning_rate1, learning_rate2, optimizer1, optimizer2, 
-                score_func_nonlin = 'default', wemb_trainable = 1, generator_halt_threshold = 0.1, liar_judge, wemb_size = None):
+                score_func_nonlin = 'default', wemb_trainable = 1, generator_halt_threshold = 0.1, liar_judge = 'fool_classifier', wemb_size = None):
         # Initialize Theano Symbolic variable attributes
         self.story_input_variable = None
         self.story_mask = None
@@ -451,10 +451,18 @@ class Hierachi_RNN(object):
                                                        peek_story_matrices[3], peek_end_matrix,
                                                        peek_story_mask[0], peek_story_mask[1], peek_story_mask[2],
                                                        peek_story_mask[3], peek_end_mask)
+        
+        list125 = np.arange(len(self.peeked_ends_ls))
+        np.random.shuffle(list125)
+        index1 = list125[0]
+        index2 = list125[1]
+        print adv_end_rep_batch[index1]
+        print adv_end_rep_batch[index1] - adv_end_rep_batch[index2]
+        print "L2 norm of the distance of two random end rep in this batch: ", np.sum(adv_end_rep_batch[index1] - adv_end_rep_batch[index2])/300.0
 
-
-        if np.all(adv_end_rep_batch[0] - adv_end_rep_batch[1] == 0):
+        if np.all(adv_end_rep_batch[index1] - adv_end_rep_batch[index2] == 0):
             print "WARNING!!! Same end rep for diff stories!"
+
         select_story_ls = self.ends_pool_ls
         random_check_ending = [self.train_ending[index] for index in select_story_ls]
         random_check_end_matrix = utils.padding(random_check_ending)
@@ -468,20 +476,28 @@ class Hierachi_RNN(object):
         # wemb_matrix = self.wemb.get_value()
         # for i in range(self.n_train):
         #     end_rep_matrix[i] = np.sum(wemb_matrix[self.train_ending[i]], axis = 0) / (len(self.train_ending[i]))
+        index_list_inMatrix = None
+        index_list = None
+        if self.liar_judge == "euclidean_distance":
+            dist_simi_matrix = np.zeros((len(self.ends_pool_ls), len(self.peeked_ends_ls)))
+            for i in range(len(self.peeked_ends_ls)):
+                dist_simi_matrix[i] = np.sqrt(np.sum((adv_end_rep_batch[i] - random_check_ending_rep)**2))
+            index_list_inMatrix = np.argmax(dist_simi_matrix, axis = 0)
+            index_list = [select_story_ls[i] for i in index_list_inMatrix]
+        else:
+            norm_end_rep_matrix = np.linalg.norm(random_check_ending_rep, axis = 1).reshape(-1,1)
+            norm_adv_end_rep = np.linalg.norm(adv_end_rep_batch, axis = 1).reshape(-1,1)
+            # norm_denominator_matrix.shape = (1000, 5)
+            norm_denominator_matrix = np.dot(norm_end_rep_matrix, norm_adv_end_rep.T)
 
-        norm_end_rep_matrix = np.linalg.norm(random_check_ending_rep, axis = 1).reshape(-1,1)
-        norm_adv_end_rep = np.linalg.norm(adv_end_rep_batch, axis = 1).reshape(-1,1)
-        # norm_denominator_matrix.shape = (1000, 5)
-        norm_denominator_matrix = np.dot(norm_end_rep_matrix, norm_adv_end_rep.T)
+            # dot_prod.shape = (1000, 5)
+            dot_prod = np.dot(random_check_ending_rep, adv_end_rep_batch.T)
 
-        # dot_prod.shape = (1000, 5)
-        dot_prod = np.dot(random_check_ending_rep, adv_end_rep_batch.T)
+            # cos_simi_matrix.shape = (1000, 5)
+            cos_simi_matrix = dot_prod / norm_denominator_matrix
 
-        # cos_simi_matrix.shape = (1000, 5)
-        cos_simi_matrix = dot_prod / norm_denominator_matrix
-
-        index_list_inMatrix = np.argmax(cos_simi_matrix, axis = 0)
-        index_list = [select_story_ls[i] for i in index_list_inMatrix]
+            index_list_inMatrix = np.argmax(cos_simi_matrix, axis = 0)
+            index_list = [select_story_ls[i] for i in index_list_inMatrix]
         '''part III print out story and the most similar end correspondingly'''
         for i in range(5):
             index = stories_indices[i]
@@ -649,10 +665,10 @@ class Hierachi_RNN(object):
 
 def main(argv):
     wemb_size = None
-    if len(argv) > 12:
-        wemb_size = argv[12]
+    if len(argv) > 13:
+        wemb_size = argv[13]
     model = Hierachi_RNN(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5], argv[6], argv[7], argv[8],argv[9], 
-                         argv[10], argv[11], wemb_size)
+                         argv[10], argv[11], argv[12], wemb_size)
 
     print "loading data"
     model.load_data()
