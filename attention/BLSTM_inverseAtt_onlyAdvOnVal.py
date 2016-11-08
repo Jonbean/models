@@ -20,7 +20,7 @@ import sys
 class Hierachi_RNN(object):
     def __init__(self, rnn_setting, val_split_ratio, D_batchsize, G_batchsize, liar_setting, 
                 learning_rate1, learning_rate2, optimizer1, optimizer2, 
-                score_func_nonlin = 'default', wemb_trainable = 1, generator_halt_threshold = 0.1, wemb_size = None):
+                score_func_nonlin = 'default', wemb_trainable = 1, generator_halt_threshold = 0.1, liar_judge, wemb_size = None):
         # Initialize Theano Symbolic variable attributes
         self.story_input_variable = None
         self.story_mask = None
@@ -71,7 +71,7 @@ class Hierachi_RNN(object):
 
         self.optimizer1 = optimizer1
         self.optimizer2 = optimizer2
-
+        self.liar_judge = liar_judge
 
         self.val_story = None
         self.val_ending1 = None 
@@ -238,8 +238,12 @@ class Hierachi_RNN(object):
         
         cost1 = lasagne.objectives.categorical_crossentropy(prob1, T.ones((self.current_Nbatch, )).astype('int64'))
         cost2 = lasagne.objectives.categorical_crossentropy(prob2, T.zeros((self.current_Nbatch, )).astype('int64'))
-
-        liar_cost = lasagne.objectives.categorical_crossentropy(prob2, T.ones((self.current_Nbatch, )).astype('int64'))
+        
+        liar_cost = None
+        if self.liar_judge == 'fool_classifier':
+            liar_cost = lasagne.objectives.categorical_crossentropy(prob2, T.ones((self.current_Nbatch, )).astype('int64'))
+        elif self.liar_judge == 'euclidean_distance':
+            liar_cost =T.sqrt(T.sum(T.sqr(self.attentioned_end_rep - self.alternative_end)))
 
         self.main_cost = lasagne.objectives.aggregate(cost1+cost2, mode = 'mean')
         self.liar_cost = lasagne.objectives.aggregate(liar_cost, mode = 'mean')
