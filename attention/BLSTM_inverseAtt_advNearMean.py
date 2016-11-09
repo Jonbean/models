@@ -19,7 +19,7 @@ import sys
 
 class Hierachi_RNN(object):
     def __init__(self, rnn_setting, batchsize, liar_setting, 
-                learning_rate1, learning_rate2, optimizer1, optimizer2, 
+                learning_rate1, learning_rate2, optimizer1, optimizer2, lambda1, lambda2,
                 score_func_nonlin = 'default', wemb_trainable = 1, wemb_size = None):
         # Initialize Theano Symbolic variable attributes
         self.story_input_variable = None
@@ -53,7 +53,7 @@ class Hierachi_RNN(object):
             self.score_func_nonlin = None
 
         self.wemb_trainable = bool(int(wemb_trainable))
-
+        self.liar_judge = 'euclidean_distance'
         self.wemb_size = 300
         if wemb_size == None:
             self.random_init_wemb = False
@@ -67,6 +67,8 @@ class Hierachi_RNN(object):
 
         self.optimizer1 = optimizer1
         self.optimizer2 = optimizer2
+        self.lambda1 = float(lambda1)
+        self.lambda2 = float(lambda2)
 
         self.val_story = None
         self.val_ending1 = None 
@@ -203,7 +205,7 @@ class Hierachi_RNN(object):
         mask_init = np.ones((self.batchsize, self.rnn_units))
         mask_init[0] = 0.0
         mask_matrix = theano.shared(mask_init)
-        for i in range(self.batchsize)
+        for i in range(self.batchsize):
             neg_mean_end_ls.append(T.sum(mask_matrix * T.roll(self.attentioned_end_rep, shift=-i, axis = 0), axis = 0, keepdims = True)/(self.batchsize-1))
         neg_mean_matrix = T.concatenate(neg_mean_end_ls, axis = 0)
 
@@ -245,7 +247,7 @@ class Hierachi_RNN(object):
         liar_away_from_neg_cost = T.sqrt(T.sum(T.sqr(self.alternative_end - neg_mean_matrix),axis = 1))
 
         self.main_cost = lasagne.objectives.aggregate(cost1+cost2, mode = 'mean')
-        self.liar_cost = lasagne.objectives.aggregate(liar_cost + liar_away_from_neg_cost, mode = 'mean')
+        self.liar_cost = lasagne.objectives.aggregate(self.lambda1*liar_cost + self.lambda2*liar_away_from_neg_cost, mode = 'mean')
 
         # Retrieve all parameters from the network
         main_params = self.encoder.all_params + self.sent_encoder.all_params + final_class_param + [self.bilinear_attention_matrix]
@@ -272,7 +274,7 @@ class Hierachi_RNN(object):
 
         # combine two sets of parameters update into a single OrderedDict 
         self.train_func = theano.function(self.inputs_variables + self.inputs_masks, 
-                                        [self.main_cost, self.liar_cost, liar_away_from_neg_cost.sum()/self.batch_size, origi_score, alter_score],
+                                        [self.main_cost, self.liar_cost, liar_away_from_neg_cost.sum()/self.batchsize, origi_score, alter_score],
                                          updates = all_updates)
         # Compute adam updates for training
 
@@ -613,12 +615,17 @@ class Hierachi_RNN(object):
                                                                train_story_mask[0], train_story_mask[1], train_story_mask[2],
                                                                train_story_mask[3], train_end_mask)
 
-                prediction = np.argmax(np.concatenate((prediction1, prediction2), axis = 1), axis = 1)
+                predict1 = np.argmax(prediction1, axis = 1)
+                predict2 = np.argmax(prediction2, axis = 1)
                 batch_correct = 0.0
-                for pred in prediction:
-                    if pred == 1 or pred == 2:
+                for pred in predict1:
+                    if pred == 1:
                         batch_correct += 1
-                total_correct_count += batch_correct
+                for pred in predict2:
+                    if pred == 0:
+                        batch_correct += 1
+
+                total_correct_count += batch_correct/2.0
                 total_main_cost += main_cost
                 total_liar_cost += liar_cost
                 total_liar_away_from_mean += liar_awayfrom_mean
@@ -657,10 +664,9 @@ class Hierachi_RNN(object):
 
 def main(argv):
     wemb_size = None
-    if len(argv) > 13:
-        wemb_size = argv[13]
-    model = Hierachi_RNN(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5], argv[6], argv[7], argv[8],argv[9], 
-                         argv[10], argv[11], argv[12], wemb_size)
+    if len(argv) > 11:
+        wemb_size = argv[11]
+    model = Hierachi_RNN(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5], argv[6], argv[7], argv[8], argv[9], argv[10], wemb_size)
 
     print "loading data"
     model.load_data()
