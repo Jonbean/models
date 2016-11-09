@@ -9,10 +9,7 @@ import cPickle as pickle
 import BLSTM_sequence
 import BLSTM_last
 import DNN_liar
-
 import sys
-# from theano.printing import pydotprint
-
 
 
 
