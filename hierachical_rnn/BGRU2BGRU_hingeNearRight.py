@@ -13,7 +13,14 @@ import sys
 
 
 class Hierachi_RNN(object):
-    def __init__(self, rnn_setting, dropout_rate, batchsize, score_func_nonlin = 'default', wemb_trainable = 1, wemb_size = None):
+    def __init__(self, 
+                 rnn_setting, 
+                 dropout_rate, 
+                 batchsize, 
+                 score_func_nonlin = 'default',
+                 wemb_trainable = 1,
+                 learning_rate = 0.001
+                 wemb_size = None):
         # Initialize Theano Symbolic variable attributes
         self.story_input_variable = None
         self.story_mask = None
@@ -42,8 +49,9 @@ class Hierachi_RNN(object):
         self.train_set_path = '../../data/pickles/train_index_corpus.pkl'
         self.val_set_path = '../../data/pickles/val_index_corpus.pkl'
         self.test_set_path = '../../data/pickles/test_index_corpus.pkl' 
-
         self.wemb_matrix_path = '../../data/pickles/index_wemb_matrix.pkl'
+        self.index2word_dict_path = '../../data/pickles/ROC_train_index_dict.pkl'
+
         self.rnn_units = int(rnn_setting)
         # self.mlp_units = [int(elem) for elem in mlp_setting.split('x')]
         self.dropout_rate = float(dropout_rate)
@@ -79,6 +87,7 @@ class Hierachi_RNN(object):
         else:
             self.score_func_nonlin = None
         self.wemb_trainable = bool(int(wemb_trainable))
+        self.learning_rate = float(learning_rate)
 
     def encoding_layer(self):
 
@@ -187,7 +196,7 @@ class Hierachi_RNN(object):
         final_score_matrix = score_matrix + self.delta * (1.0 - cosine_cost_matrix)
 
         max_score_vec = T.max(final_score_matrix, axis = 1)
-        # max_score_index_pre = T.argmax(score_matrix, axis = 1)
+        max_score_index = T.argmax(score_matrix, axis = 1)
 
         # #1. generate index shift
         # index_shift = theano.shared(np.arange(self.batchsize) + 1)
@@ -215,17 +224,17 @@ class Hierachi_RNN(object):
         # cost1 = lasagne.objectives.binary_crossentropy(prob1, target1)
         # cost2 = lasagne.objectives.binary_crossentropy(prob2, target2)
         score_vec = T.clip( - self.score1 + max_score_vec, 0.0, float('inf'))
-        self.cost = lasagne.objectives.aggregate(score_vec, mode='sum') 
+        self.cost = lasagne.objectives.aggregate(score_vec, mode='mean') 
 
 
         # Retrieve all parameters from the network
         all_params = self.encoder.all_params + reasoner_params + final_class_param
 
-        all_updates = lasagne.updates.adam(self.cost, all_params, learning_rate=0.001)
+        all_updates = lasagne.updates.adam(self.cost, all_params, learning_rate=self.learning_rate)
         # all_updates = lasagne.updates.momentum(self.cost, all_params, learning_rate = 0.05, momentum=0.9)
 
         self.train_func = theano.function(self.inputs_variables + self.inputs_masks, 
-                                        [self.cost, self.score1, max_score_vec], updates = all_updates)
+                                        [self.cost, self.score1, max_score_vec, max_score_index], updates = all_updates)
 
         # test ending2
         end2 = T.matrix(name = "test_end2", dtype = 'int64')
@@ -234,9 +243,10 @@ class Hierachi_RNN(object):
         batch_size, seqlen = end2.shape
         end2_reshape = end2.reshape([batch_size, seqlen, 1])
 
-        encoded_end2 = lasagne.layers.get_output(self.encoder.output, {self.encoder.l_in: end2_reshape, 
+        encoded_end2_seq = lasagne.layers.get_output(self.encoder.output, {self.encoder.l_in: end2_reshape, 
                                                                        self.encoder.l_mask:mask_end2},
                                                                        deterministic = True)
+        encoded_end2 = (encoded_end2_seq * mask_end2.dimshuffle(0,1,'x')).sum(axis = 1) / mask_end2.sum(axis = 1, keepdims = True)         
         self.score2 = lasagne.layers.get_output(l_hid, {l_story_in: reasoner_result, 
                                                    l_end_in: encoded_end2})
 
@@ -245,10 +255,13 @@ class Hierachi_RNN(object):
         # pydotprint(self.train_func, './computational_graph.png')
 
     def load_data(self):
+        '''======Train Set====='''
         train_set = pickle.load(open(self.train_set_path))
         self.train_story = train_set[0]
         self.train_ending = train_set[1]
-
+        self.n_train = len(self.train_ending)
+        
+        '''=====Val Set====='''
         val_set = pickle.load(open(self.val_set_path))
 
         self.val_story = val_set[0]
@@ -258,6 +271,7 @@ class Hierachi_RNN(object):
 
         self.n_val = len(self.val_answer)
 
+        '''=====Test Set====='''
         test_set = pickle.load(open(self.test_set_path))
         self.test_story = test_set[0]
         self.test_ending1 = test_set[1]
@@ -265,12 +279,20 @@ class Hierachi_RNN(object):
         self.test_answer = test_set[3]
         self.n_test = len(self.test_answer)
 
+
+        ''''=====Wemb====='''
         if self.random_init_wemb:
-            wemb = np.random.rand(28820 ,self.wemb_size)
+            wemb = np.random.rand(self.words_num ,self.wemb_size)
             wemb = np.concatenate((np.zeros((1, self.wemb_size)), wemb), axis = 0)
             self.wemb = theano.shared(wemb).astype(theano.config.floatX)
         else:
             self.wemb = theano.shared(pickle.load(open(self.wemb_matrix_path))).astype(theano.config.floatX)
+
+        '''=====Peeping Preparation====='''
+        self.peeked_ends_ls = np.random.randint(self.n_train, size=(5,))
+        self.ends_pool_ls = np.random.choice(range(self.n_train), 2000, replace = False)
+        self.index2word_dict = pickle.load(open(self.index2word_dict_path))
+       
 
     def fake_load_data(self):
         self.train_story = []
@@ -335,9 +357,7 @@ class Hierachi_RNN(object):
             # Answer denotes the index of the anwer
             prediction = np.argmax(np.concatenate((score1, score2), axis=1), axis=1)
             correct_vec = prediction - self.val_answer[i*minibatch_n:(i+1)*minibatch_n]
-            print correct_vec
             correct += minibatch_n - (abs(correct_vec)).sum()
-            print correct
 
         for k in range(minibatch_n * max_batch_n, self.n_val):
             story = [np.asarray(sent, dtype='int64').reshape((1,-1)) for sent in self.val_story[k]]
@@ -357,7 +377,6 @@ class Hierachi_RNN(object):
 
             if prediction == self.val_answer[k]:
                 correct += 1.    
-        print self.n_val
         return correct/self.n_val
 
     def test_set_test(self):
@@ -471,6 +490,7 @@ class Hierachi_RNN(object):
             total_cost = 0.0
             total_correct_count = 0.0
 
+            max_score_index = None
             for batch in range(max_batch):
                 batch_count += 1
 
@@ -487,7 +507,7 @@ class Hierachi_RNN(object):
                 # train_end2_mask = utils.mask_generator(end2)
 
 
-                cost, score1, score2 = self.train_func(train_story_matrices[0], train_story_matrices[1], train_story_matrices[2],
+                cost, score1, score2, max_score_index = self.train_func(train_story_matrices[0], train_story_matrices[1], train_story_matrices[2],
                                                                train_story_matrices[3], train_end_matrix,
                                                                train_story_mask[0], train_story_mask[1], train_story_mask[2],
                                                                train_story_mask[3], train_end_mask)
@@ -499,7 +519,8 @@ class Hierachi_RNN(object):
                 total_cost += cost
                 if batch_count % test_threshold == 0:
                     print "accuracy on training set: ", total_correct_count/((batch+1) * N_BATCH)*100.0, "%"
-
+                    print "example score sequence"
+                    print np.concatenate((score1.reshape((-1,1)), score2.reshape((-1,1))), axis = 1)
                     print "test on val set..."
                     val_result = self.val_set_test()
                     print "accuracy is: ", val_result*100, "%"
@@ -511,30 +532,40 @@ class Hierachi_RNN(object):
                         print "test set accuracy: ", test_accuracy*100, "%"
                         if test_accuracy > best_test_accuracy:
                             best_test_accuracy = test_accuracy
+                    print "example negative ending:"
+                    '''===================================================='''
+                    '''randomly print out a story and it's higest score ending
+                       competitive in a minibatch                          '''
+                    '''===================================================='''
+                    rand_index = np.random.randint(self.batchsize)
+                    index = shuffled_index_list[N_BATCH * batch + rand_index]
+
+                    story_string = " | ".join([" ".join([self.index2word_dict[self.train_story[index][j][k]] for k in range(len(self.train_story[index][j]))]) for j in range(5)])
+                    story_end = " ".join([self.index2word_dict[self.train_ending[index][k]] for k in range(len(self.train_ending[index]))])
+                    highest_score_end = " ".join([self.index2word_dict[self.train_ending[max_score_index[rand_index]][k]] for k in range(len(self.train_ending[max_score_index[rand_index]]))])
+
+                    print story_string 
+                    print " #END# " + story_end
+                    print ""
+                    print "Highest Score Ending in this batch: " + highest_score_end 
+                    print ""
+
+
 
             print "======================================="
             print "epoch summary:"
-            print "average cost in this epoch: ", total_cost
+            print "average cost in this epoch: ", total_cost/max_batch
             print "average speed: ", N_TRAIN_INS/(time.time() - start_time), "instances/s "
-
-            val_result = self.val_set_test()
-            print "valid set accuracy: ", val_result*100, "%"
-            if val_result > best_val_accuracy:
-                print "new best! test on test set..."
-                best_val_accuracy = val_result
-
-            test_accuracy = self.test_set_test()
-            print "test set accuracy: ", test_accuracy*100, "%"
-            if test_accuracy > best_test_accuracy:
-                best_test_accuracy = test_accuracy
+            print "accuracy for this epoch: "+str(total_correct_count/(max_batch * N_BATCH) * 100.0)+"%"
+ 
             print "======================================="
 
 
 def main(argv):
     wemb_size = None
-    if len(argv) > 5:
-        wemb_size = argv[5]
-    model = Hierachi_RNN(argv[0], argv[1], argv[2], argv[3], argv[4], wemb_size)
+    if len(argv) > 6:
+        wemb_size = argv[6]
+    model = Hierachi_RNN(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5], wemb_size)
 
     print "loading data"
     model.load_data()
