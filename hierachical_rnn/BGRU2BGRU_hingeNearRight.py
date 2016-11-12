@@ -19,7 +19,8 @@ class Hierachi_RNN(object):
                  batchsize, 
                  score_func_nonlin = 'default',
                  wemb_trainable = 1,
-                 learning_rate = 0.001
+                 learning_rate = 0.001,
+                 delta = 1.0,
                  wemb_size = None):
         # Initialize Theano Symbolic variable attributes
         self.story_input_variable = None
@@ -81,7 +82,7 @@ class Hierachi_RNN(object):
 
         self.train_encodinglayer_vecs = []
 
-        self.delta = 5.0
+        self.delta = float(delta)
         if score_func_nonlin == 'default':
             self.score_func_nonlin = lasagne.nonlinearities.tanh
         else:
@@ -563,9 +564,9 @@ class Hierachi_RNN(object):
 
 def main(argv):
     wemb_size = None
-    if len(argv) > 6:
-        wemb_size = argv[6]
-    model = Hierachi_RNN(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5], wemb_size)
+    if len(argv) > 7:
+        wemb_size = argv[7]
+    model = Hierachi_RNN(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5], argv[6], wemb_size)
 
     print "loading data"
     model.load_data()
