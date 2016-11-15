@@ -1,17 +1,18 @@
 import theano
-import theano.tensor as The
+import theano.tensor as T
 import lasagne
 import numpy as np
 
 class BlstmEncoder(object):
-    def __init__(self, LSTMLAYER_1_UNITS, dropout_rate):
+    def __init__(self, LSTMLAYER_1_UNITS, wemb_trainable = True):
         self.layer1_units = LSTMLAYER_1_UNITS
         self.wemb = None
-        self.GRAD_CLIP = 10.
+        self.GRAD_CLIP = 100.
         self.l_in = None
         self.l_mask = None
         self.output = None
-        self.dropout_rate = dropout_rate
+        self.dropout_rate = 0.0
+        self.wemb_trainable = wemb_trainable
 
     def build_model(self, WordEmbedding_Init = None):
 
@@ -41,10 +42,12 @@ class BlstmEncoder(object):
 
         # The embedding layers with retieve subtensor from word embedding matrix
         l_emb = lasagne.layers.EmbeddingLayer(self.l_in, input_size=self.wemb.get_value().shape[0], output_size=self.wemb.get_value().shape[1], W=self.wemb)
-
-        l_drop = lasagne.layers.DropoutLayer(l_emb, p = self.dropout_rate)
+        if not self.wemb_trainable:
+            l_emb.params[l_emb.W].remove('trainable')
+            
+        # l_drop = lasagne.layers.DropoutLayer(l_emb, p = self.dropout_rate)
         # The LSTM layer should have the same mask input in order to avoid padding entries
-        l_lstm = lasagne.layers.recurrent.LSTMLayer(l_drop, 
+        l_lstm = lasagne.layers.recurrent.LSTMLayer(l_emb, 
                                                     num_units=self.layer1_units,
                                                     # We need to specify a separate input for masks
                                                     mask_input=self.l_mask,
@@ -57,7 +60,7 @@ class BlstmEncoder(object):
 
 
         # The back directional LSTM layers
-        l_lstm_back = lasagne.layers.recurrent.LSTMLayer(l_drop,
+        l_lstm_back = lasagne.layers.recurrent.LSTMLayer(l_emb,
                                                          num_units=self.layer1_units,
                                                          mask_input = self.l_mask,
                                                          ingate=gate_parameters, forgetgate=gate_parameters, 
@@ -73,6 +76,9 @@ class BlstmEncoder(object):
 
         #here we shuffle the dimension of the 3D output of matrix of l_lstm2 because
         #pooling layer's gonna collapse the trailling axes
+        #l_shuffle = lasagne.layers.DimshuffleLayer(l_sum, (0,2,1))
+
+        #l_pooling = lasagne.layers.GlobalPoolLayer(l_shuffle)
 
         self.output = l_sum
-        self.all_params = lasagne.layers.get_all_params(self.output)
+        self.all_params = lasagne.layers.get_all_params(l_sum)
