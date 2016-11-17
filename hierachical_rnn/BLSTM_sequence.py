@@ -7,7 +7,7 @@ class BlstmEncoder(object):
     def __init__(self, LSTMLAYER_1_UNITS, wemb_trainable = True):
         self.layer1_units = LSTMLAYER_1_UNITS
         self.wemb = None
-        self.GRAD_CLIP = 100.
+        self.GRAD_CLIP = 10.
         self.l_in = None
         self.l_mask = None
         self.output = None
@@ -30,13 +30,13 @@ class BlstmEncoder(object):
         #setting gates and cell parameters with specific nonlinearity functions
         gate_parameters = lasagne.layers.recurrent.Gate(W_in=lasagne.init.Orthogonal(), 
                                                         W_hid=lasagne.init.Orthogonal(),
-                                                        b=lasagne.init.Constant(0.))
+                                                        b=lasagne.init.Constant(0.001))
 
         cell_parameters = lasagne.layers.recurrent.Gate(W_in=lasagne.init.Orthogonal(), 
                                                         W_hid=lasagne.init.Orthogonal(),
                                                         # Setting W_cell to None denotes that no cell connection will be used. 
                                                         W_cell=None, 
-                                                        b=lasagne.init.Constant(0.),
+                                                        b=lasagne.init.Constant(0.001),
                                                         # By convention, the cell nonlinearity is tanh in an LSTM. 
                                                         nonlinearity=lasagne.nonlinearities.tanh)
 

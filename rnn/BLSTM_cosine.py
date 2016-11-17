@@ -92,7 +92,7 @@ class Hierachi_RNN(object):
         
         batch_rep2_broad = batch_rep2 + T.zeros((self.batch_m, self.batch_m, self.rnn_units))
         batch_rep1_reshape = batch_rep1_broad.reshape((-1, self.rnn_units))
-        batch_rep2_reshape = batch_rep2_broad.reshape((-1, self.rnn_units))
+        batch_rep2_reshape = batch_rep2_broad.dimshuffle(1,0,2).reshape((-1, self.rnn_units))
 
         batch_dot = (T.batched_dot(batch_rep1_reshape, batch_rep2_reshape)).reshape((self.batch_m, self.batch_m))
         norm1 = T.sqrt(T.sum(T.sqr(batch_rep1), axis = 1))
@@ -442,23 +442,22 @@ class Hierachi_RNN(object):
                         print "test set accuracy: ", test_accuracy*100, "%"
                         if test_accuracy > best_test_accuracy:
                             best_test_accuracy = test_accuracy
+                    print "max score index over the last minibatch:", max_score_index
                     print "example negative ending:"
                     '''===================================================='''
                     '''randomly print out a story and it's higest score ending
                        competitive in a minibatch                          '''
                     '''===================================================='''
-                    rand_index = np.random.randint(self.batchsize)
-                    index = shuffled_index_list[N_BATCH * batch + rand_index]
+                    for i in range(5):
+                        story_string = " ".join([self.index2word_dict[self.train_story[batch_index_list[i]][k]] for k in range(len(self.train_story[batch_index_list[i]]))])
+                        story_end = " ".join([self.index2word_dict[self.train_ending[batch_index_list[i]][k]] for k in range(len(self.train_ending[batch_index_list[i]]))])
+                        highest_score_end = " ".join([self.index2word_dict[self.train_ending[batch_index_list[max_score_index[i]]][k]] for k in range(len(self.train_ending[batch_index_list[max_score_index[i]]]))])
 
-                    story_string = " ".join([self.index2word_dict[self.train_story[index][k]] for k in range(len(self.train_story[index]))])
-                    story_end = " ".join([self.index2word_dict[self.train_ending[index][k]] for k in range(len(self.train_ending[index]))])
-                    highest_score_end = " ".join([self.index2word_dict[self.train_ending[max_score_index[rand_index]][k]] for k in range(len(self.train_ending[max_score_index[rand_index]]))])
-
-                    print story_string 
-                    print " #END# " + story_end
-                    print ""
-                    print "Highest Score Ending in this batch: " + highest_score_end 
-                    print ""
+                        print story_string 
+                        print " #END# " + story_end
+                        print ""
+                        print "Highest Score Ending in this batch: " + highest_score_end 
+                        print ""
 
 
 

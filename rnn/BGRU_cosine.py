@@ -92,7 +92,7 @@ class Hierachi_RNN(object):
         
         batch_rep2_broad = batch_rep2 + T.zeros((self.batch_m, self.batch_m, self.rnn_units))
         batch_rep1_reshape = batch_rep1_broad.reshape((-1, self.rnn_units))
-        batch_rep2_reshape = batch_rep2_broad.reshape((-1, self.rnn_units))
+        batch_rep2_reshape = batch_rep2_broad.dimshuffle(1,0,2).reshape((-1, self.rnn_units))
 
         batch_dot = (T.batched_dot(batch_rep1_reshape, batch_rep2_reshape)).reshape((self.batch_m, self.batch_m))
         norm1 = T.sqrt(T.sum(T.sqr(batch_rep1), axis = 1))
@@ -165,7 +165,7 @@ class Hierachi_RNN(object):
 
         score1 = T.flatten(T.nlinalg.diag(score_matrix))
 
-        all_other_score_matrix = score_matrix * (T.identity_like(score_matrix) - T.eye(self.batch_m)) + T.eye(self.batch_m) * T.min(score_matrix, axis = 1)
+        all_other_score_matrix = score_matrix * (T.identity_like(score_matrix) - T.eye(self.batch_m)) - T.eye(self.batch_m)
 
         max_other_score = T.max(all_other_score_matrix, axis = 1)
         max_score_index = T.argmax(all_other_score_matrix, axis = 1) 
@@ -182,7 +182,7 @@ class Hierachi_RNN(object):
         # all_updates = lasagne.updates.momentum(self.cost, all_params, learning_rate = 0.05, momentum=0.9)
 
         self.train_func = theano.function(self.inputs_variables[:-1] + self.inputs_masks[:-1], 
-                                        [self.cost, score1, max_other_score, max_score_index], updates = all_updates)
+                                        [self.cost, score1, max_other_score, max_score_index, all_other_score_matrix], updates = all_updates)
 
         # test ending2
         self.score2 = self.batch_cosine(self.train_encodinglayer_vecs[0], self.train_encodinglayer_vecs[2])
@@ -404,7 +404,6 @@ class Hierachi_RNN(object):
 
             max_score_index = None
             for batch in range(max_batch):
-                batch_count += 1
 
                 batch_index_list = [shuffled_index_list[i] for i in range(batch * N_BATCH, (batch+1) * N_BATCH)]
                 train_story = [self.train_story[index] for index in batch_index_list]
@@ -419,7 +418,7 @@ class Hierachi_RNN(object):
                 # train_end2_mask = utils.mask_generator(end2)
 
 
-                cost, score1, score2, max_score_index = self.train_func(train_story_matrix,
+                cost, score1, score2, max_score_index, all_other_score_matrix = self.train_func(train_story_matrix,
                                                                         train_end_matrix, 
                                                                         train_story_mask,
                                                                         train_end_mask)
@@ -427,7 +426,7 @@ class Hierachi_RNN(object):
                 total_correct_count += np.count_nonzero((score1 - score2).clip(0.0))
 
                 total_cost += cost
-                if batch_count % test_threshold == 0:
+                if batch % test_threshold == 0 and batch != 0:
                     print "accuracy on training set: ", total_correct_count/((batch+1) * N_BATCH)*100.0, "%"
                     print "example score sequence"
                     print np.concatenate((score1.reshape((-1,1)), score2.reshape((-1,1))), axis = 1)
@@ -447,27 +446,25 @@ class Hierachi_RNN(object):
                     '''randomly print out a story and it's higest score ending
                        competitive in a minibatch                          '''
                     '''===================================================='''
-                    rand_index = np.random.randint(self.batchsize)
-                    index = shuffled_index_list[N_BATCH * batch + rand_index]
+                    for i in range(5):
+                        story_string = " ".join([self.index2word_dict[self.train_story[batch_index_list[i]][k]] for k in range(len(self.train_story[batch_index_list[i]]))])
+                        story_end = " ".join([self.index2word_dict[self.train_ending[batch_index_list[i]][k]] for k in range(len(self.train_ending[batch_index_list[i]]))])
+                        highest_score_end = " ".join([self.index2word_dict[self.train_ending[batch_index_list[max_score_index[i]]][k]] for k in range(len(self.train_ending[batch_index_list[max_score_index[i]]]))])
 
-                    story_string = " ".join([self.index2word_dict[self.train_story[index][k]] for k in range(len(self.train_story[index]))])
-                    story_end = " ".join([self.index2word_dict[self.train_ending[index][k]] for k in range(len(self.train_ending[index]))])
-                    highest_score_end = " ".join([self.index2word_dict[self.train_ending[max_score_index[rand_index]][k]] for k in range(len(self.train_ending[max_score_index[rand_index]]))])
+                        print story_string 
+                        print " #END# " + story_end
+                        print ""
+                        print "Highest Score Ending in this batch: " + highest_score_end 
+                        print ""
 
-                    print story_string 
-                    print " #END# " + story_end
-                    print ""
-                    print "Highest Score Ending in this batch: " + highest_score_end 
-                    print ""
-
-
+                    print "max score index over the last minibatch :", max_score_index 
+                    print "other score matrix: ", all_other_score_matrix
 
             print "======================================="
             print "epoch summary:"
             print "average cost in this epoch: ", total_cost/max_batch
             print "average speed: ", N_TRAIN_INS/(time.time() - start_time), "instances/s "
             print "accuracy for this epoch: "+str(total_correct_count/(max_batch * N_BATCH) * 100.0)+"%"
- 
             print "======================================="
 
 

@@ -111,14 +111,14 @@ class Hierachi_RNN(object):
         batch2_norm = T.sqrt(batch2sqr.sum(axis = 1)).sum()
 
         batch_cosine_vec = dot_prod/(batch1_norm * batch2_norm)
-        return batch_cosine_vec
+        return batch_cosine_vec.reshape((-1,1))
 
     def matrix_cos(self, batch_rep1, batch_rep2):
         batch_rep1_broad = batch_rep1 + T.zeros((self.batch_m, self.batch_m, self.rnn_units))
         
         batch_rep2_broad = batch_rep2 + T.zeros((self.batch_m, self.batch_m, self.rnn_units))
         batch_rep1_reshape = batch_rep1_broad.reshape((-1, self.rnn_units))
-        batch_rep2_reshape = batch_rep2_broad.reshape((-1, self.rnn_units))
+        batch_rep2_reshape = batch_rep2_broad.dimshuffle(1,0,2).reshape((-1, self.rnn_units))
 
         batch_dot = (T.batched_dot(batch_rep1_reshape, batch_rep2_reshape)).reshape((self.batch_m, self.batch_m))
         norm1 = T.sqrt(T.sum(T.sqr(batch_rep1), axis = 1))
@@ -199,19 +199,6 @@ class Hierachi_RNN(object):
         self.cost = lasagne.objectives.aggregate(score_vec, mode='mean') 
 
 
-        score_matrix = T.concatenate(self.test_score, axis = 1)
-        cosine_cost_matrix = T.concatenate(self.cosine_column_ls, axis = 1)
-
-        final_score_matrix = score_matrix + self.delta * (1.0 - cosine_cost_matrix)
-
-        max_score_vec = T.max(final_score_matrix, axis = 1)
-        max_score_index = T.argmax(score_matrix, axis = 1)
-        final_score = - score1 + self.delta + max_other_score
-
-        score_vec = T.clip(final_score, 0.0, float('inf'))
-        self.cost = lasagne.objectives.aggregate(score_vec, mode='mean') 
-
-
 
         # Retrieve all parameters from the network
         all_params = self.encoder.all_params + reasoner_params
@@ -220,7 +207,7 @@ class Hierachi_RNN(object):
         # all_updates = lasagne.updates.momentum(self.cost, all_params, learning_rate = 0.05, momentum=0.9)
 
         self.train_func = theano.function(self.inputs_variables + self.inputs_masks, 
-                                        [self.cost, score1, max_score_vec, max_score_index], updates = all_updates)
+                                        [self.cost, score1, max_other_score, max_score_index, all_other_score_matrix], updates = all_updates)
 
         # test ending2
         end2 = T.matrix(name = "test_end2", dtype = 'int64')
@@ -490,7 +477,7 @@ class Hierachi_RNN(object):
                 # train_end2_mask = utils.mask_generator(end2)
 
 
-                cost, score1, score2, max_score_index = self.train_func(train_story_matrices[0], train_story_matrices[1], train_story_matrices[2],
+                cost, score1, score2, max_score_index, all_other_score_matrix = self.train_func(train_story_matrices[0], train_story_matrices[1], train_story_matrices[2],
                                                                train_story_matrices[3], train_end_matrix,
                                                                train_story_mask[0], train_story_mask[1], train_story_mask[2],
                                                                train_story_mask[3], train_end_mask)
@@ -515,23 +502,24 @@ class Hierachi_RNN(object):
                         print "test set accuracy: ", test_accuracy*100, "%"
                         if test_accuracy > best_test_accuracy:
                             best_test_accuracy = test_accuracy
-                    print "example negative ending:"
+                    print "max score index over the last minibatch:", max_score_index
+                    print "cosine score matrix over the minibatch:", all_other_score_matrix 
                     '''===================================================='''
                     '''randomly print out a story and it's higest score ending
                        competitive in a minibatch                          '''
                     '''===================================================='''
-                    rand_index = np.random.randint(self.batchsize)
-                    index = shuffled_index_list[N_BATCH * batch + rand_index]
-
-                    story_string = " | ".join([" ".join([self.index2word_dict[self.train_story[index][j][k]] for k in range(len(self.train_story[index][j]))]) for j in range(5)])
-                    story_end = " ".join([self.index2word_dict[self.train_ending[index][k]] for k in range(len(self.train_ending[index]))])
-                    highest_score_end = " ".join([self.index2word_dict[self.train_ending[max_score_index[rand_index]][k]] for k in range(len(self.train_ending[max_score_index[rand_index]]))])
-
-                    print story_string 
-                    print " #END# " + story_end
-                    print ""
-                    print "Highest Score Ending in this batch: " + highest_score_end 
-                    print ""
+#                    rand_index = np.random.randint(self.batchsize)
+#                    index = shuffled_index_list[N_BATCH * batch + rand_index]
+#
+#                    story_string = " | ".join([" ".join([self.index2word_dict[self.train_story[index][j][k]] for k in range(len(self.train_story[index][j]))]) for j in range(5)])
+#                    story_end = " ".join([self.index2word_dict[self.train_ending[index][k]] for k in range(len(self.train_ending[index]))])
+#                    highest_score_end = " ".join([self.index2word_dict[self.train_ending[max_score_index[rand_index]][k]] for k in range(len(self.train_ending[max_score_index[rand_index]]))])
+#
+#                    print story_string 
+#                    print " #END# " + story_end
+#                    print ""
+#                    print "Highest Score Ending in this batch: " + highest_score_end 
+#                    print ""
 
 
 
@@ -546,9 +534,9 @@ class Hierachi_RNN(object):
 
 def main(argv):
     wemb_size = None
-    if len(argv) > 7:
-        wemb_size = argv[7]
-    model = Hierachi_RNN(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5], argv[6], wemb_size)
+    if len(argv) > 6:
+        wemb_size = argv[6]
+    model = Hierachi_RNN(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5], wemb_size)
 
     print "loading data"
     model.load_data()

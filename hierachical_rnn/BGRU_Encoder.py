@@ -7,7 +7,7 @@ class BGRUEncoder(object):
     def __init__(self, LAYER_1_UNITS, dropout_rate = 0.0, wemb_trainable = 1):
         self.layer1_units = LAYER_1_UNITS
         self.wemb = None
-        self.GRAD_CLIP = 100.
+        self.GRAD_CLIP = 10.
         self.dropout_rate = dropout_rate
         self.l_in = None
         self.l_mask = None
@@ -64,11 +64,11 @@ class BGRUEncoder(object):
         gate_parameters = lasagne.layers.recurrent.Gate(W_in=lasagne.init.Orthogonal(), 
                                                         W_hid=lasagne.init.Orthogonal(),
                                                         W_cell=None,
-                                                        b=lasagne.init.Constant(0.))
+                                                        b=lasagne.init.Constant(0.001))
         hidden_parameter = lasagne.layers.recurrent.Gate(W_in=lasagne.init.Orthogonal(), 
                                                         W_hid=lasagne.init.Orthogonal(),
                                                         W_cell=None,
-                                                        b=lasagne.init.Constant(0.),
+                                                        b=lasagne.init.Constant(0.001),
                                                         nonlinearity=lasagne.nonlinearities.tanh)
 
         # The LSTM layer should have the same mask input in order to avoid padding entries
