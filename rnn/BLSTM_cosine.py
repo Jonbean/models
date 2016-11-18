@@ -375,7 +375,6 @@ class Hierachi_RNN(object):
         best_val_accuracy = 0
         best_test_accuracy = 0
         test_threshold = 10000/N_BATCH
-        batch_count = 0.0
         start_batch = 0.0
 
         '''init test'''
@@ -404,7 +403,6 @@ class Hierachi_RNN(object):
 
             max_score_index = None
             for batch in range(max_batch):
-                batch_count += 1
 
                 batch_index_list = [shuffled_index_list[i] for i in range(batch * N_BATCH, (batch+1) * N_BATCH)]
                 train_story = [self.train_story[index] for index in batch_index_list]
@@ -427,7 +425,7 @@ class Hierachi_RNN(object):
                 total_correct_count += np.count_nonzero((score1 - score2).clip(0.0))
 
                 total_cost += cost
-                if batch_count % test_threshold == 0:
+                if batch % test_threshold == 0 and batch != 0:
                     print "accuracy on training set: ", total_correct_count/((batch+1) * N_BATCH)*100.0, "%"
                     print "example score sequence"
                     print np.concatenate((score1.reshape((-1,1)), score2.reshape((-1,1))), axis = 1)
