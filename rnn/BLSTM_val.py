@@ -277,7 +277,7 @@ class Hierachi_RNN(object):
             best_test_accuracy = test_accuracy
         """end of init test"""
 
-        
+       
         for epoch in range(N_EPOCHS):
             print "epoch ", epoch,":"
             shuffled_index_list = self.val_train_ls
@@ -306,20 +306,13 @@ class Hierachi_RNN(object):
                 train_end1_mask = utils.mask_generator(train_ending1)
                 train_end2_mask = utils.mask_generator(train_ending2)
 
-                # neg_end_index_list = np.random.randint(N_TRAIN_INS, size = (N_BATCH,))
-                # while np.any((np.asarray(batch_index_list) - neg_end_index_list) == 0):
-                #     neg_end_index_list = np.random.randint(N_TRAIN_INS, size = (N_BATCH,))
-                # neg_end1 = [self.train_ending[index] for index in neg_end_index_list]
-                # answer = np.random.randint(2, size = N_BATCH)
-                # target1 = 1 - answer
-                # target2 = 1 - target1
                 answer = np.asarray([self.val_answer[index] for index in batch_index_list])
 
                 target1 = 2 * answer - 1
                 target2 = -2 * answer + 1
                 # answer_vec = np.concatenate(((1 - answer).reshape(-1,1), answer.reshape(-1,1)),axis = 1)
 
-                cost, prediction1, prediction2 = self.train_func(train_story, train_ending1, train_ending2, 
+                cost, prediction1, prediction2 = self.train_func(train_story_matrix, train_end1_matrix, train_end2_matrix, 
                                                                  train_story_mask, train_end1_mask, train_end2_mask, 
                                                                  target1, target2)
 
