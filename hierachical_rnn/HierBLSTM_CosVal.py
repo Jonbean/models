@@ -72,9 +72,17 @@ class Hierachi_RNN(object):
                                                {self.encoder.l_in:self.reshaped_inputs_variables[i], 
                                                 self.encoder.l_mask:self.inputs_masks[i]},
                                                 deterministic = True))
-            sent_rep = sent_seq 
-            self.train_encodinglayer_vecs.append(sent_seq.dimshuffle(0,1,'x'))                   
+            self.train_encodinglayer_vecs.append((sent_seq * self.inputs_masks[i].dimshuffle(0,1,'x')).sum(axis = 1) / self.inputs_masks[i].sum(axis = 1, keepdims = True))         
            
+    def batch_cosine(self, batch_vectors1, batch_vectors2):
+        dot_prod = T.batched_dot(batch_vectors1, batch_vectors2)
+
+
+        batch1_norm = T.sqrt(T.sum(T.sqr(batch_vectors1), axis = 1))
+        batch2_norm = T.sqrt(T.sum(T.sqr(batch_vectors2), axis = 1))
+        batch_cosine_vec = dot_prod/(batch1_norm * batch2_norm)
+        return batch_cosine_vec.dimshuffle(0,'x')
+
 
     def model_constructor(self, wemb_size = None):
         self.inputs_variables = []
@@ -95,9 +103,10 @@ class Hierachi_RNN(object):
 
         #build reasoning layers
 
-        self.merge_ls = [T.reshape(tensor, (tensor.shape[0], 1, tensor.shape[1])) for tensor in self.train_encodinglayer_vecs]
+        self.merge_ls = [T.reshape(tensor, (tensor.shape[0], 1, tensor.shape[1])) for tensor in self.train_encodinglayer_vecs[:-2]]
 
-        encode_merge = T.concatenate(self.merge_ls[:-1], axis = 1)
+        encode_merge = T.concatenate(self.merge_ls, axis = 1)
+
 
         l_in = lasagne.layers.InputLayer(shape=(None, None, self.rnn_units))
         gate_parameters = lasagne.layers.recurrent.Gate(W_in=lasagne.init.Orthogonal(), 
@@ -137,45 +146,27 @@ class Hierachi_RNN(object):
         reasoner_result = lasagne.layers.get_output(l_sum, {l_in: encode_merge}, deterministic = True)
         reasoner_params = lasagne.layers.get_all_params(l_sum)
 
-        l_story_in = lasagne.layers.InputLayer(shape=(None, self.rnn_units))
-        l_end_in = lasagne.layers.InputLayer(shape = (None, self.rnn_units))
-        l_concate = lasagne.layers.ConcatLayer([l_story_in, l_end_in], axis = 1)
-
-        l_hid = lasagne.layers.DenseLayer(l_concate, num_units=2,
-                                          nonlinearity=lasagne.nonlinearities.tanh)
-
-        final_class_param = lasagne.layers.get_all_params(l_hid)
-
-        score1 = lasagne.layers.get_output(l_hid, {l_story_in: reasoner_result, 
-                                                   l_end_in: self.train_encodinglayer_vecs[-2]})
-        score2 = lasagne.layers.get_output(l_hid, {l_story_in: reasoner_result, 
-                                                   l_end_in: self.train_encodinglayer_vecs[-1]})
-
-        prob1 = lasagne.nonlinearities.softmax(score1)
-        prob2 = lasagne.nonlinearities.softmax(score2)
-
         # Construct symbolic cost function
         target1 = T.vector('gold_target1', dtype= 'int64')
         target2 = T.vector('gold_target2', dtype= 'int64')
 
-        cost1 = lasagne.objectives.categorical_crossentropy(prob1, target1)
-        cost2 = lasagne.objectives.categorical_crossentropy(prob2, target2)
+        cost1 = self.batch_cosine(reasoner_result, self.train_encodinglayer_vecs[-2])
+        cost2 = self.batch_cosine(reasoner_result, self.train_encodinglayer_vecs[-1])
 
-        self.cost = lasagne.objectives.aggregate(cost1+cost2, mode='sum')
-
+        self.cost = lasagne.objectives.aggregate(target1 * cost1 + target2 * cost2, mode='mean')
 
         # Retrieve all parameters from the network
-        all_params = self.encoder.all_params + reasoner_params + final_class_param
+        all_params = self.encoder.all_params + reasoner_params 
 
         all_updates = lasagne.updates.adam(self.cost, all_params, learning_rate=0.001)
         # all_updates = lasagne.updates.momentum(self.cost, all_params, learning_rate = 0.05, momentum=0.9)
 
         self.train_func = theano.function(self.inputs_variables + self.inputs_masks + [target1, target2], 
-                                        [self.cost, prob1, prob2], updates = all_updates)
+                                        [self.cost, cost1, cost2], updates = all_updates)
 
         # Compute adam updates for training
 
-        self.prediction = theano.function(self.inputs_variables + self.inputs_masks + [target1, target2], [self.cost, prob1, prob2])
+        self.prediction = theano.function(self.inputs_variables + self.inputs_masks, [self.cost, cost1, cost2])
         # pydotprint(self.train_func, './computational_graph.png')
 
     def load_data(self):
@@ -214,40 +205,6 @@ class Hierachi_RNN(object):
         else:
             self.wemb = theano.shared(pickle.load(open(self.wemb_matrix_path))).astype(theano.config.floatX)
 
-    def fake_load_data(self):
-        self.train_story = []
-        self.train_story.append(np.concatenate((np.random.randint(10, size = (50, 10)), 10+np.random.randint(10, size=(50,10))),axis=0).astype('int64'))
-        self.train_story.append(np.ones((100, 10)).astype('int64'))
-        self.train_story.append(np.ones((100, 10)).astype('int64'))
-        self.train_story.append(np.ones((100, 10)).astype('int64'))
-        self.train_story = np.asarray(self.train_story).reshape([100,4,10])
-
-        self.train_ending = np.concatenate((2 * np.ones((50, 5)), np.ones((50, 5))), axis = 0)
-        self.val_story = []
-        self.val_story.append(np.random.randint(10, size = (100, 10)).astype('int64'))
-        self.val_story.append(np.random.randint(10, size = (100, 10)).astype('int64'))
-        self.val_story.append(np.random.randint(10, size = (100, 10)).astype('int64'))
-        self.val_story.append(np.random.randint(10, size = (100, 10)).astype('int64'))
-
-        self.val_ending1 = np.ones((100, 10)).astype('int64')
-        self.val_ending2 = 2*np.ones((100, 10)).astype('int64')
-        self.val_answer = np.zeros(100)
-        self.n_val = self.val_answer.shape[0]
-
-        self.test_story = []
-        self.test_story.append(np.random.randint(20, size = (100, 10)).astype('int64'))
-        self.test_story.append(np.random.randint(20, size = (100, 10)).astype('int64'))
-        self.test_story.append(np.random.randint(20, size = (100, 10)).astype('int64'))
-        self.test_story.append(np.random.randint(20, size = (100, 10)).astype('int64'))
-
-        self.test_ending1 = np.ones((100, 10)).astype('int64')
-        self.test_ending2 = 2*np.ones((100, 10)).astype('int64')
-        self.test_answer = np.ones(100)
-        self.n_test = self.test_answer.shape[0]
-
-
-        self.wemb = theano.shared(np.random.rand(30, self.rnn_units)).astype(theano.config.floatX)
-
 
     def val_set_test(self):
 
@@ -265,23 +222,12 @@ class Hierachi_RNN(object):
 
             cost, score1, score2 = self.prediction(story[0], story[1], story[2], story[3], 
                                                        ending1, ending2, story_mask[0], story_mask[1], story_mask[2],
-                                                       story_mask[3], ending1_mask, ending2_mask, 1 - np.asarray([self.val_answer[i]]), 
-                                                       np.asarray([self.val_answer[i]]))
+                                                       story_mask[3], ending1_mask, ending2_mask)
             
             # Answer denotes the index of the anwer
-            prediction = np.argmax(np.concatenate((score1, score2), axis=1))
+            prediction = np.argmax(np.concatenate((score1, score2), axis = 1), axis = 1)
 
-            predict_answer = 0
-            if prediction == 0:
-                predict_answer = 1
-            elif prediction == 1:
-                predict_answer = 0
-            elif prediction == 2:
-                predict_answer = 0
-            else:
-                predict_answer = 1
-
-            if predict_answer == self.val_answer[i]:
+            if prediction == self.val_answer[i]:
                 correct += 1.
 
 
@@ -303,23 +249,13 @@ class Hierachi_RNN(object):
 
             cost, score1, score2 = self.prediction(story[0], story[1], story[2], story[3], 
                                                        ending1, ending2, story_mask[0], story_mask[1], story_mask[2],
-                                                       story_mask[3], ending1_mask, ending2_mask, 1 - np.asarray([self.test_answer[i]]), 
-                                                       np.asarray([self.test_answer[i]]))
+                                                       story_mask[3], ending1_mask, ending2_mask)
             
             # Answer denotes the index of the anwer
-            prediction = np.argmax(np.concatenate((score1, score2), axis=1))
+            prediction = np.argmax(np.concatenate((score1, score2), axis = 1), axis = 1)
 
-            predict_answer = 0
-            if prediction == 0:
-                predict_answer = 1
-            elif prediction == 1:
-                predict_answer = 0
-            elif prediction == 2:
-                predict_answer = 0
-            else:
-                predict_answer = 1
 
-            if predict_answer == self.test_answer[i]:
+            if prediction == self.test_answer[i]:
                 correct += 1.
 
 
@@ -387,34 +323,8 @@ class Hierachi_RNN(object):
             for batch in range(max_batch):
                 batch_index_list = [shuffled_index_list[i] for i in range(batch * N_BATCH, (batch+1) * N_BATCH)]
                 train_story = [[self.val_story[index][i] for index in batch_index_list] for i in range(self.story_nsent)]
-                train_ending = [self.val_ending1[index] for index in batch_index_list]
-                neg_end1 = [self.val_ending2[index] for index in batch_index_list]
-                # neg_end_index_list = np.random.randint(N_TRAIN_INS, size = (N_BATCH,))
-                # while np.any((np.asarray(batch_index_list) - neg_end_index_list) == 0):
-                #     neg_end_index_list = np.random.randint(N_TRAIN_INS, size = (N_BATCH,))
-                # neg_end1 = [self.train_ending[index] for index in neg_end_index_list]
-                # answer = np.random.randint(2, size = N_BATCH)
-                # target1 = 1 - answer
-                # target2 = 1 - target1
-                answer = np.asarray([self.val_answer[index] for index in batch_index_list])
-
-                target1 = 1 - answer
-                target2 = answer
-                # answer_vec = np.concatenate(((1 - answer).reshape(-1,1), answer.reshape(-1,1)),axis = 1)
-                end1 = []
-                end2 = []
-
-                # for i in range(N_BATCH):
-                #     if answer[i] == 0:
-                #         end1.append(train_ending[i])
-                #         end2.append(neg_end1[i])
-                #     else:
-                #         end1.append(neg_end1[i])
-                #         end2.append(train_ending[i])
-
-                for i in range(N_BATCH):
-                    end1.append(train_ending[i])
-                    end2.append(neg_end1[i])
+                end1 = [self.val_ending1[index] for index in batch_index_list]
+                end2 = [self.val_ending2[index] for index in batch_index_list]
 
                 train_story_matrices = [utils.padding(batch_sent) for batch_sent in train_story]
                 train_end1_matrix = utils.padding(end1)
@@ -423,7 +333,12 @@ class Hierachi_RNN(object):
                 train_story_mask = [utils.mask_generator(batch_sent) for batch_sent in train_story]
                 train_end1_mask = utils.mask_generator(end1)
                 train_end2_mask = utils.mask_generator(end2)
-                
+
+                answer = np.asarray([self.val_answer[index] for index in batch_index_list])
+
+                target1 = 2 * answer - 1
+                target2 = -2 * answer + 1
+                # answer_vec = np.concatenate(((1 - answer).reshape(-1,1), answer.reshape(-1,1)),axis = 1)
 
                 cost, prediction1, prediction2 = self.train_func(train_story_matrices[0], train_story_matrices[1], train_story_matrices[2],
                                                                train_story_matrices[3], train_end1_matrix, train_end2_matrix,
@@ -433,28 +348,16 @@ class Hierachi_RNN(object):
 
 
                 prediction = np.argmax(np.concatenate((prediction1, prediction2), axis = 1), axis = 1)
-                predict_answer = np.zeros((N_BATCH, ))
-                for i in range(N_BATCH):
-                    if prediction[i] == 0:
-                        predict_answer[i] = 1
-                    elif prediction[i] == 1:
-                        predict_answer[i] = 0
-                    elif prediction[i] == 2:
-                        predict_answer[i] = 0
-                    else:
-                        predict_answer[i] = 1
-
-                total_err_count += (abs(predict_answer - answer)).sum()
 
 
-
+                total_err_count += (abs(prediction - answer)).sum()
 
 
                 total_cost += cost
 
             print "======================================="
             print "epoch summary:"
-            print "total cost in this epoch: ", total_cost
+            print "total cost in this epoch: ", total_cost / max_batch
             print "accuracy on training set: ", (1.0-(total_err_count / N_TRAIN_INS)) * 100, "%"
             val_result = self.val_set_test()
             print "accuracy is: ", val_result*100, "%"

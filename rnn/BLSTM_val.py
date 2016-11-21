@@ -326,7 +326,7 @@ class Hierachi_RNN(object):
 
             print "======================================="
             print "epoch summary:"
-            print "total cost in this epoch: ", total_cost
+            print "total cost in this epoch: ", total_cost / (max_batch)
             print "accuracy on training set: ", (1.0-(total_err_count / N_TRAIN_INS)) * 100, "%"
             val_result = self.val_set_test()
             print "accuracy is: ", val_result*100, "%"
