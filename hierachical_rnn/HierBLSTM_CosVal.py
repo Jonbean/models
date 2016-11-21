@@ -14,7 +14,12 @@ import sys
 
 
 class Hierachi_RNN(object):
-    def __init__(self, rnn_setting, dropout_rate, batchsize, val_split_ratio, wemb_size = None):
+    def __init__(self, rnn_setting,
+                 batchsize, 
+                 val_split_ratio,
+                 learning_rate,
+                 wemb_trainable,
+                 wemb_size = None):
         # Initialize Theano Symbolic variable attributes
         self.story_input_variable = None
         self.story_mask = None
@@ -33,11 +38,11 @@ class Hierachi_RNN(object):
 
         self.rnn_units = int(rnn_setting)
         # self.mlp_units = [int(elem) for elem in mlp_setting.split('x')]
-        self.dropout_rate = float(dropout_rate)
         self.batchsize = int(batchsize)
 
         self.val_split_ratio = float(val_split_ratio)
-
+        self.learning_rate = float(learning_rate)
+        self.wemb_trainable = bool(int(wemb_trainable))
         self.wemb_size = 300
         if wemb_size == None:
             self.random_init_wemb = False
@@ -95,7 +100,7 @@ class Hierachi_RNN(object):
             self.reshaped_inputs_variables.append(self.inputs_variables[i].reshape([batch_size, seqlen, 1]))
 
         #initialize neural network units
-        self.encoder = BLSTM_Encoder.BlstmEncoder(LSTMLAYER_1_UNITS = self.rnn_units, dropout_rate = self.dropout_rate)
+        self.encoder = BLSTM_Encoder.BlstmEncoder(LSTMLAYER_1_UNITS = self.rnn_units, wemb_trainable = self.wemb_trainable)
         self.encoder.build_model(self.wemb)
 
         #build encoding layer
@@ -147,8 +152,8 @@ class Hierachi_RNN(object):
         reasoner_params = lasagne.layers.get_all_params(l_sum)
 
         # Construct symbolic cost function
-        target1 = T.vector('gold_target1', dtype= 'int64')
-        target2 = T.vector('gold_target2', dtype= 'int64')
+        target1 = T.vector('gold_target1', dtype= theano.config.floatX)
+        target2 = T.vector('gold_target2', dtype= theano.config.floatX)
 
         cost1 = self.batch_cosine(reasoner_result, self.train_encodinglayer_vecs[-2])
         cost2 = self.batch_cosine(reasoner_result, self.train_encodinglayer_vecs[-1])
@@ -158,7 +163,7 @@ class Hierachi_RNN(object):
         # Retrieve all parameters from the network
         all_params = self.encoder.all_params + reasoner_params 
 
-        all_updates = lasagne.updates.adam(self.cost, all_params, learning_rate=0.001)
+        all_updates = lasagne.updates.adam(self.cost, all_params, learning_rate = self.learning_rate)
         # all_updates = lasagne.updates.momentum(self.cost, all_params, learning_rate = 0.05, momentum=0.9)
 
         self.train_func = theano.function(self.inputs_variables + self.inputs_masks + [target1, target2], 
@@ -374,9 +379,9 @@ class Hierachi_RNN(object):
 
 def main(argv):
     wemb_size = None
-    if len(argv) > 3:
-        wemb_size = argv[3]
-    model = Hierachi_RNN(argv[0], argv[1], argv[2], wemb_size)
+    if len(argv) > 5:
+        wemb_size = argv[5]
+    model = Hierachi_RNN(argv[0], argv[1], argv[2],argv[3], argv[4], wemb_size)
 
     print "loading data"
     model.load_data()
