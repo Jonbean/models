@@ -6,7 +6,7 @@ import os
 import time
 import utils
 import cPickle as pickle
-import BLSTM_sequence
+import BGRU_Encoder
 import sys
 # from theano.printing import pydotprint
 
@@ -99,7 +99,7 @@ class Hierachi_RNN(object):
             self.reshaped_inputs_variables.append(self.inputs_variables[i].reshape([batch_size, seqlen, 1]))
 
         #initialize neural network units
-        self.encoder = BLSTM_sequence.BlstmEncoder(LSTMLAYER_1_UNITS = self.rnn_units, wemb_trainable = self.wemb_trainable)
+        self.encoder = BGRU_Encoder.BGRUEncoder(LAYER_1_UNITS = self.rnn_units, dropout_rate = 0.0, wemb_trainable = self.wemb_trainable)
         self.encoder.build_model(self.wemb)
 
         #build encoding layer
@@ -115,38 +115,34 @@ class Hierachi_RNN(object):
         l_in = lasagne.layers.InputLayer(shape=(None, None, self.rnn_units))
         gate_parameters = lasagne.layers.recurrent.Gate(W_in=lasagne.init.Orthogonal(), 
                                                         W_hid=lasagne.init.Orthogonal(),
+                                                        W_cell=None,
                                                         b=lasagne.init.Constant(0.001))
-
-        cell_parameters = lasagne.layers.recurrent.Gate(W_in=lasagne.init.Orthogonal(), 
+        hidden_parameter = lasagne.layers.recurrent.Gate(W_in=lasagne.init.Orthogonal(), 
                                                         W_hid=lasagne.init.Orthogonal(),
-                                                        # Setting W_cell to None denotes that no cell connection will be used. 
-                                                        W_cell=None, 
+                                                        W_cell=None,
                                                         b=lasagne.init.Constant(0.001),
-                                                        # By convention, the cell nonlinearity is tanh in an LSTM. 
                                                         nonlinearity=lasagne.nonlinearities.tanh)
 
-        l_lstm = lasagne.layers.recurrent.LSTMLayer(l_in, 
-                                                    num_units=self.rnn_units,
-                                                    # Here, we supply the gate parameters for each gate 
-                                                    ingate=gate_parameters, forgetgate=gate_parameters, 
-                                                    cell=cell_parameters, outgate=gate_parameters,
-                                                    # We'll learn the initialization and use gradient clipping 
-                                                    learn_init=True,grad_clipping= 10.
-)
 
-        # The back directional LSTM layers
-        l_lstm_back = lasagne.layers.recurrent.LSTMLayer(l_in,
-                                                         num_units=self.rnn_units,
-                                                         ingate=gate_parameters, forgetgate=gate_parameters, 
-                                                         cell=cell_parameters, outgate=gate_parameters,
-                                                         # We'll learn the initialization and use gradient clipping 
-                                                         learn_init=True, grad_clipping=10.
+        l_grurnn = lasagne.layers.recurrent.GRULayer(l_drop, num_units=self.layer1_units, resetgate=gate_parameters,
+                                                    updategate=gate_parameters, hidden_update=hidden_parameter,
+                                                    backwards=False,
+                                                    learn_init=True, 
+                                                    gradient_steps=-1, grad_clipping=10., 
+                                                    precompute_input=True, mask_input=self.l_mask
+                                                    )
 
-                                                         backwards=True)
+        l_grurnn_back = lasagne.layers.recurrent.GRULayer(l_drop, num_units=self.layer1_units, resetgate=gate_parameters,
+                                                    updategate=gate_parameters, hidden_update=hidden_parameter,
+                                                    backwards=True,
+                                                    learn_init=True, 
+                                                    gradient_steps=-1, grad_clipping=10., 
+                                                    precompute_input=True, mask_input=self.l_mask
+                                                    )
 
-        # Do sum up of bidirectional LSTM results
-        l_out_right = lasagne.layers.SliceLayer(l_lstm, -1, 1)
-        l_out_left = lasagne.layers.SliceLayer(l_lstm_back, -1, 1)
+       # Do sum up of bidirectional LSTM results
+        l_out_right = lasagne.layers.SliceLayer(l_grurnn, -1, 1)
+        l_out_left = lasagne.layers.SliceLayer(l_grnrnn_back, -1, 1)
         l_sum = lasagne.layers.ElemwiseSumLayer([l_out_right, l_out_left])
 
         reasoner_result = lasagne.layers.get_output(l_sum, {l_in: encode_merge}, deterministic = True)
