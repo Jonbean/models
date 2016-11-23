@@ -189,7 +189,7 @@ class Hierachi_RNN(object):
 
         score1 = T.flatten(T.nlinalg.diag(score_matrix))
 
-        all_other_score_matrix = score_matrix * (T.identity_like(score_matrix) - T.eye(self.batch_m)) + T.eye(self.batch_m) * T.min(score_matrix, axis = 1)
+        all_other_score_matrix = score_matrix * (T.identity_like(score_matrix) - T.eye(self.batch_m)) - T.eye(self.batch_m)
 
         max_other_score = T.max(all_other_score_matrix, axis = 1)
         max_score_index = T.argmax(all_other_score_matrix, axis = 1) 
@@ -477,11 +477,10 @@ class Hierachi_RNN(object):
                 # train_end2_mask = utils.mask_generator(end2)
 
 
-                cost, score1, score2, max_score_index, all_other_score_matrix = self.train_func(train_story_matrices[0], train_story_matrices[1], train_story_matrices[2],
+                cost, score1, score2, max_score_index, all_other_score_matrix= self.train_func(train_story_matrices[0], train_story_matrices[1], train_story_matrices[2],
                                                                train_story_matrices[3], train_end_matrix,
                                                                train_story_mask[0], train_story_mask[1], train_story_mask[2],
                                                                train_story_mask[3], train_end_mask)
-
 
 
                 total_correct_count += np.count_nonzero((score1 - score2).clip(0.0))

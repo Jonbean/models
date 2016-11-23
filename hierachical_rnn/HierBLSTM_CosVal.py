@@ -140,7 +140,7 @@ class Hierachi_RNN(object):
                                                          ingate=gate_parameters, forgetgate=gate_parameters, 
                                                          cell=cell_parameters, outgate=gate_parameters,
                                                          # We'll learn the initialization and use gradient clipping 
-                                                         learn_init=True, grad_clipping=10.
+                                                         learn_init=True, grad_clipping=10.,
 
                                                          backwards=True)
 

@@ -124,25 +124,25 @@ class Hierachi_RNN(object):
                                                         nonlinearity=lasagne.nonlinearities.tanh)
 
 
-        l_grurnn = lasagne.layers.recurrent.GRULayer(l_drop, num_units=self.layer1_units, resetgate=gate_parameters,
+        l_grurnn = lasagne.layers.recurrent.GRULayer(l_in, num_units=self.rnn_units, resetgate=gate_parameters,
                                                     updategate=gate_parameters, hidden_update=hidden_parameter,
                                                     backwards=False,
                                                     learn_init=True, 
                                                     gradient_steps=-1, grad_clipping=10., 
-                                                    precompute_input=True, mask_input=self.l_mask
+                                                    precompute_input=True
                                                     )
 
-        l_grurnn_back = lasagne.layers.recurrent.GRULayer(l_drop, num_units=self.layer1_units, resetgate=gate_parameters,
+        l_grurnn_back = lasagne.layers.recurrent.GRULayer(l_in, num_units=self.rnn_units, resetgate=gate_parameters,
                                                     updategate=gate_parameters, hidden_update=hidden_parameter,
                                                     backwards=True,
                                                     learn_init=True, 
                                                     gradient_steps=-1, grad_clipping=10., 
-                                                    precompute_input=True, mask_input=self.l_mask
+                                                    precompute_input=True
                                                     )
 
        # Do sum up of bidirectional LSTM results
         l_out_right = lasagne.layers.SliceLayer(l_grurnn, -1, 1)
-        l_out_left = lasagne.layers.SliceLayer(l_grnrnn_back, -1, 1)
+        l_out_left = lasagne.layers.SliceLayer(l_grurnn_back, -1, 1)
         l_sum = lasagne.layers.ElemwiseSumLayer([l_out_right, l_out_left])
 
         reasoner_result = lasagne.layers.get_output(l_sum, {l_in: encode_merge}, deterministic = True)
