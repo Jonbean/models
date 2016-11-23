@@ -189,7 +189,7 @@ class Hierachi_RNN(object):
 
         score1 = T.flatten(T.nlinalg.diag(score_matrix))
 
-        all_other_score_matrix = score_matrix * (T.identity_like(score_matrix) - T.eye(self.batch_m)) - T.eye(self.batch_m)
+        all_other_score_matrix = score_matrix * (T.ones_like(score_matrix) - T.eye(self.batch_m)) - T.eye(self.batch_m)
 
         max_other_score = T.max(all_other_score_matrix, axis = 1)
         max_score_index = T.argmax(all_other_score_matrix, axis = 1) 
@@ -433,8 +433,6 @@ class Hierachi_RNN(object):
         best_val_accuracy = 0
         best_test_accuracy = 0
         test_threshold = 10000/N_BATCH
-        batch_count = 0.0
-        start_batch = 0.0
 
         '''init test'''
         print "initial test..."
@@ -462,7 +460,6 @@ class Hierachi_RNN(object):
 
             max_score_index = None
             for batch in range(max_batch):
-                batch_count += 1
 
                 batch_index_list = [shuffled_index_list[i] for i in range(batch * N_BATCH, (batch+1) * N_BATCH)]
                 train_story = [[self.train_story[index][i] for index in batch_index_list] for i in range(1, self.story_nsent+1)]
@@ -482,28 +479,30 @@ class Hierachi_RNN(object):
                                                                train_story_mask[0], train_story_mask[1], train_story_mask[2],
                                                                train_story_mask[3], train_end_mask)
 
-
                 total_correct_count += np.count_nonzero((score1 - score2).clip(0.0))
+                
 
                 total_cost += cost
-                if batch_count % test_threshold == 0:
+                if batch % test_threshold == 0 and batch != 0:
+                    train_acc = total_cost/((batch+1) * N_BATCH)*100.0
                     print "accuracy on training set: ", total_correct_count/((batch+1) * N_BATCH)*100.0, "%"
-                    print "example score sequence"
-                    print np.concatenate((score1.reshape((-1,1)), score2.reshape((-1,1))), axis = 1)
-                    print "test on val set..."
-                    val_result = self.val_set_test()
-                    print "accuracy is: ", val_result*100, "%"
-                    if val_result > best_val_accuracy:
-                        print "new best! test on test set..."
-                        best_val_accuracy = val_result
+                    if train_acc > 60:
+                        print "example score sequence"
+                        print np.concatenate((score1.reshape((-1,1)), score2.reshape((-1,1))), axis = 1)
+                        print "test on val set..."
+                        val_result = self.val_set_test()
+                        print "accuracy is: ", val_result*100, "%"
+                        if val_result > best_val_accuracy:
+                            print "new best! test on test set..."
+                            best_val_accuracy = val_result
 
-                        test_accuracy = self.test_set_test()
-                        print "test set accuracy: ", test_accuracy*100, "%"
-                        if test_accuracy > best_test_accuracy:
-                            best_test_accuracy = test_accuracy
-                    print "max score index over the last minibatch:", max_score_index
-                    print "cosine score matrix over the minibatch:", all_other_score_matrix 
-                    '''===================================================='''
+                            test_accuracy = self.test_set_test()
+                            print "test set accuracy: ", test_accuracy*100, "%"
+                            if test_accuracy > best_test_accuracy:
+                                best_test_accuracy = test_accuracy
+                        print "max score index over the last minibatch:", max_score_index
+                        print "cosine score matrix over the minibatch:", all_other_score_matrix 
+                        '''===================================================='''
                     '''randomly print out a story and it's higest score ending
                        competitive in a minibatch                          '''
                     '''===================================================='''
