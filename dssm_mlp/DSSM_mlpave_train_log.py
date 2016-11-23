@@ -10,8 +10,15 @@ import MLP_Encoder
 import sys
 
 class DSSM_MLP_Model(object):
-    def __init__(self, mlp_units, dropout_rate, batchsize, optimizer, 
-                scorefunc, wemb_size = None):
+    def __init__(self, 
+                 mlp_units, 
+                 dropout_rate, 
+                 val_split_ratio,
+                 batchsize, 
+                 optimizer, 
+                 scorefunc, 
+                 wemb_size = None):
+
         # Initialize Theano Symbolic variable attributes
         self.story_input_variable = None
         self.story_mask = None
@@ -24,6 +31,7 @@ class DSSM_MLP_Model(object):
         self.neg_ending1_mask = None
 
         self.encoder = None
+        self.val_split_ratio = float(val_split_ratio)
 
         unit_ls = mlp_units.split('x')
         self.mlp_units = [int(unit) for unit in unit_ls]
@@ -147,7 +155,7 @@ class DSSM_MLP_Model(object):
             self.end1_score_vec = self.batch_cosine(story_vec, end1_vec).reshape([-1, 1])
             self.end2_score_vec = self.batch_cosine(story_vec, end2_vec).reshape([-1, 1])
 
-            self.all_params = self.encoder.all_params+embeding_params
+            self.all_params = self.encoder.all_params
 
         else:
             cache_result = T.dot(story_vec, self.bilinear_weight)
@@ -155,38 +163,34 @@ class DSSM_MLP_Model(object):
             self.end1_score_vec = score_matrix.diagonal().reshape([-1, 1])
             self.end2_score_vec = T.dot(cache_result, T.transpose(end2_vec)).diagonal().reshape([-1, 1])
 
-            self.all_params = self.encoder.all_params + embeding_params+[self.bilinear_weight]
+            self.all_params = self.encoder.all_params +[self.bilinear_weight]
 
         loss = - self.end1_score_vec + self.end2_score_vec
 
-        self.cost = lasagne.objectives.aggregate(loss, mode='sum')
+        self.cost = lasagne.objectives.aggregate(loss, mode='mean')
         # Retrieve all parameters from the network
 
         
-        
         self.all_updates = None 
         if self.optimizer == 'SGD':
-            self.all_updates = lasagne.updates.sgd(self.cost, self.all_params, 0.05)
+            self.all_updates = lasagne.updates.sgd(self.cost, self.all_params, 0.01)
         else:
             self.all_updates = lasagne.updates.adam(self.cost, self.all_params)
 
-        self.train_func = theano.function(self.story_input_variable+self.story_mask+
-                                     [self.ending1_input_variable, self.ending1_mask,
-                                     self.ending2_input_variable, self.ending2_mask],
-                                     [self.cost, self.end1_score_vec, self.end2_score_vec], updates = self.all_updates)
+        self.train_func = theano.function(self.story_input_variable+
+                                        [self.ending1_input_variable, self.ending2_input_variable]+
+                                        self.story_mask+[self.ending1_mask, self.ending2_mask],
+                                        [self.cost, self.end1_score_vec, self.end2_score_vec], updates = self.all_updates)
 
-        # Compute adam updates for training
 
-        self.compute_cost = theano.function(self.story_input_variable+self.story_mask+
-                                     [self.ending1_input_variable, self.ending1_mask,
-                                     self.ending2_input_variable, self.ending2_mask],
-                                     [self.end1_score_vec, self.end2_score_vec])
+        self.prediction = theano.function(self.story_input_variable+
+                                        [self.ending1_input_variable, self.ending2_input_variable]+
+                                        self.story_mask+[self.ending1_mask, self.ending2_mask],
+                                        [self.end1_score_vec, self.end2_score_vec])
 
     def load_data(self):
-        train_set = pickle.load(open(self.train_set_path))
-        self.train_story = train_set[0]
-        self.train_ending1 = train_set[1]
-        self.n_train = len(self.train_ending1)
+        '''======Train Set====='''
+
 
         val_set = pickle.load(open(self.val_set_path))
 
@@ -195,7 +199,15 @@ class DSSM_MLP_Model(object):
         self.val_ending2 = val_set[2]
         self.val_answer = val_set[3]
 
-        self.n_val = len(self.val_answer)
+        self.val_len = len(self.val_answer)
+        self.val_train_n = int(self.val_split_ratio * self.val_len)
+        self.val_test_n = self.val_len - self.val_train_n
+
+        shuffled_indices_ls = utils.shuffle_index(len(self.val_answer))
+
+        self.val_train_ls = shuffled_indices_ls[:self.val_train_n]
+        self.val_test_ls = shuffled_indices_ls[self.val_train_n:]
+
 
         test_set = pickle.load(open(self.test_set_path))
         self.test_story = test_set[0]
@@ -211,110 +223,64 @@ class DSSM_MLP_Model(object):
         else:
             self.wemb = theano.shared(pickle.load(open(self.wemb_matrix_path))).astype(theano.config.floatX)
 
-
-
     def val_set_test(self):
+
         correct = 0.
 
-        minibatch_n = 50
-        max_batch_n = self.n_val / minibatch_n
-        for i in range(max_batch_n):
+        for i in self.val_test_ls:
+            story = [np.asarray(sent, dtype='int64').reshape((1,-1)) for sent in self.val_story[i]]
+            story_mask = [np.ones((1,len(self.val_story[i][j]))) for j in range(4)]
 
-            story_ls = [[self.val_story[index][j] for index in range(i*minibatch_n, (i+1)*minibatch_n)] for j in range(self.story_nsent)]
-            story_matrix = [utils.padding(batch_sent) for batch_sent in story_ls]
-            story_mask = [utils.mask_generator(batch_sent) for batch_sent in story_ls]
+            ending1 = np.asarray(self.val_ending1[i], dtype='int64').reshape((1,-1))
+            ending1_mask = np.ones((1,len(self.val_ending1[i])))
 
-            ending1_ls = [self.val_ending1[index] for index in range(i*minibatch_n, (i+1)*minibatch_n)]
-            ending1_matrix = utils.padding(ending1_ls)
-            ending1_mask = utils.mask_generator(ending1_ls)
+            ending2 = np.asarray(self.val_ending2[i], dtype='int64').reshape((1,-1))
+            ending2_mask = np.ones((1, len(self.val_ending2[i])))
 
-
-            ending2_ls = [self.val_ending2[index] for index in range(i*minibatch_n, (i+1)*minibatch_n)]
-            ending2_matrix = utils.padding(ending2_ls)
-            ending2_mask = utils.mask_generator(ending2_ls)
-
-            score1, score2 = self.compute_cost(story_matrix[0], story_matrix[1], story_matrix[2], story_matrix[3], 
-                                                story_mask[0], story_mask[1], story_mask[2], story_mask[3],
-                                                ending1_matrix, ending1_mask, ending2_matrix, ending2_mask)
+            score1, score2 = self.prediction(story[0], story[1], story[2], story[3], 
+                                           ending1, ending2, story_mask[0], story_mask[1], story_mask[2],
+                                           story_mask[3], ending1_mask, ending2_mask)
 
             # Answer denotes the index of the anwer
-            prediction = np.argmax(np.concatenate((score1, score2), axis=1), axis=1)
-            correct_vec = prediction - self.val_answer[i*minibatch_n:(i+1)*minibatch_n]
-            correct += minibatch_n - (abs(correct_vec)).sum()
+            predict_answer = 0
+            if score2 > score1:
+                predict_answer = 1
 
-        for k in range(minibatch_n * max_batch_n, self.n_val):
-            story = [np.asarray(sent, dtype='int64').reshape((1,-1)) for sent in self.val_story[k]]
-            story_mask = [np.ones((1,len(self.val_story[k][j]))) for j in range(4)]
+            if predict_answer == self.val_answer[i]:
+                correct += 1.
 
 
-            ending1 = np.asarray(self.val_ending1[k], dtype='int64').reshape((1,-1))
-            ending1_mask = np.ones((1,len(self.val_ending1[k])))
-
-            ending2 = np.asarray(self.val_ending2[k], dtype='int64').reshape((1,-1))
-            ending2_mask = np.ones((1, len(self.val_ending2[k])))
-
-            score1, score2 = self.compute_cost(story[0], story[1], story[2], story[3], 
-                                    story_mask[0], story_mask[1], story_mask[2],story_mask[3],
-                                    ending1,  ending1_mask, ending2, ending2_mask)
-            # Answer denotes the index of the anwer
-            prediction = np.argmax(np.concatenate((score1, score2), axis=1))
-
-            if prediction == self.val_answer[k]:
-                correct += 1.    
-        return correct/self.n_val
+        return correct/self.val_test_n
 
     def test_set_test(self):
         #load test set data
-
         correct = 0.
 
-        minibatch_n = 50
-        max_batch_n = self.n_test / minibatch_n
-        for i in range(max_batch_n):
+        for i in range(self.n_test):
+            story = [np.asarray(sent, dtype='int64').reshape((1,-1)) for sent in self.test_story[i]]
+            story_mask = [np.ones((1,len(self.test_story[i][j]))) for j in range(4)]
 
-            story_ls = [[self.test_story[index][j] for index in range(i*minibatch_n, (i+1)*minibatch_n)] for j in range(self.story_nsent)]
-            story_matrix = [utils.padding(batch_sent) for batch_sent in story_ls]
-            story_mask = [utils.mask_generator(batch_sent) for batch_sent in story_ls]
+            ending1 = np.asarray(self.test_ending1[i], dtype='int64').reshape((1,-1))
+            ending1_mask = np.ones((1,len(self.test_ending1[i])))
 
-            ending1_ls = [self.test_ending1[index] for index in range(i*minibatch_n, (i+1)*minibatch_n)]
-            ending1_matrix = utils.padding(ending1_ls)
-            ending1_mask = utils.mask_generator(ending1_ls)
+            ending2 = np.asarray(self.test_ending2[i], dtype='int64').reshape((1,-1))
+            ending2_mask = np.ones((1, len(self.test_ending2[i])))
 
-
-            ending2_ls = [self.test_ending2[index] for index in range(i*minibatch_n, (i+1)*minibatch_n)]
-            ending2_matrix = utils.padding(ending2_ls)
-            ending2_mask = utils.mask_generator(ending2_ls)
-
-            score1, score2 = self.compute_cost(story_matrix[0], story_matrix[1], story_matrix[2], story_matrix[3], 
-                                    story_mask[0], story_mask[1], story_mask[2],story_mask[3],ending1_matrix,  
-                                    ending1_mask, ending2_matrix, ending2_mask)
-
+            score1, score2 = self.prediction(story[0], story[1], story[2], story[3], 
+                                             ending1, ending2, story_mask[0], story_mask[1], story_mask[2],
+                                             story_mask[3], ending1_mask, ending2_mask)
+            
             # Answer denotes the index of the anwer
-            prediction = np.argmax(np.concatenate((score1, score2), axis=1), axis=1)
-            correct_vec = prediction - self.test_answer[i*minibatch_n:(i+1)*minibatch_n]
-            correct += minibatch_n - (abs(correct_vec)).sum()
+            predict_answer = 0
+            if score2 > score1:
+                predict_answer = 1
 
-        for k in range(minibatch_n * max_batch_n, self.n_test):
-            story = [np.asarray(sent, dtype='int64').reshape((1,-1)) for sent in self.test_story[k]]
-            story_mask = [np.ones((1,len(self.test_story[k][j]))) for j in range(4)]
-
-            ending1 = np.asarray(self.test_ending1[k], dtype='int64').reshape((1,-1))
-            ending1_mask = np.ones((1,len(self.test_ending1[k])))
-
-            ending2 = np.asarray(self.test_ending2[k], dtype='int64').reshape((1,-1))
-            ending2_mask = np.ones((1, len(self.test_ending2[k])))
-
-            score1, score2 = self.compute_cost(story[0], story[1], story[2], story[3], 
-                                     story_mask[0], story_mask[1], story_mask[2],story_mask[3],
-                                     ending1, ending1_mask, ending2, ending2_mask)
-            # Answer denotes the index of the anwer
-            prediction = np.argmax(np.concatenate((score1, score2), axis=1))
-
-            if prediction == self.test_answer[k]:
-                correct += 1.            
+            if predict_answer == self.val_answer[i]:
+                correct += 1.
 
 
         return correct/self.n_test
+
 
     # def saving_model(self, val_or_test, accuracy):
     #     doc_all_params_value = lasagne.layers.get_all_param_values(self.doc_encoder.output)
@@ -339,7 +305,7 @@ class DSSM_MLP_Model(object):
     def begin_train(self):
         N_EPOCHS = 100
         N_BATCH = self.batchsize
-        N_TRAIN_INS = self.n_train
+        N_TRAIN_INS = self.val_train_n
         best_val_accuracy = 0
         best_test_accuracy = 0
 
@@ -360,7 +326,8 @@ class DSSM_MLP_Model(object):
         
         for epoch in range(N_EPOCHS):
             print "epoch ", epoch,":"
-            shuffled_index_list = utils.shuffle_index(N_TRAIN_INS)
+            shuffled_index_list = self.val_train_ls
+            np.random.shuffle(shuffled_index_list)
 
             max_batch = N_TRAIN_INS/N_BATCH
 
@@ -371,55 +338,79 @@ class DSSM_MLP_Model(object):
 
             for batch in range(max_batch):
                 batch_index_list = [shuffled_index_list[i] for i in range(batch * N_BATCH, (batch+1) * N_BATCH)]
-                train_story = [[self.train_story[index][j] for index in batch_index_list] for j in range(1, self.story_nsent+1)]
-                train_ending1 = [self.train_ending1[index] for index in batch_index_list]
+                train_story = [[self.val_story[index][i] for index in batch_index_list] for i in range(self.story_nsent)]
+                train_ending = [self.val_ending1[index] for index in batch_index_list]
+                neg_end1 = [self.val_ending2[index] for index in batch_index_list]
+                # neg_end_index_list = np.random.randint(N_TRAIN_INS, size = (N_BATCH,))
+                # while np.any((np.asarray(batch_index_list) - neg_end_index_list) == 0):
+                #     neg_end_index_list = np.random.randint(N_TRAIN_INS, size = (N_BATCH,))
+                # neg_end1 = [self.train_ending[index] for index in neg_end_index_list]
+                # answer = np.random.randint(2, size = N_BATCH)
+                # target1 = 1 - answer
+                # target2 = 1 - target1
+                answer = np.asarray([self.val_answer[index] for index in batch_index_list])
+
+
+                # answer_vec = np.concatenate(((1 - answer).reshape(-1,1), answer.reshape(-1,1)),axis = 1)
+                end1 = []
+                end2 = []
+
+                for i in range(N_BATCH):
+                    if answer[i] == 0:
+                        end1.append(train_ending[i])
+                        end2.append(neg_end1[i])
+                    else:
+                        end1.append(neg_end1[i])
+                        end2.append(train_ending[i])
+
+
+
+                train_story_matrices = [utils.padding(batch_sent) for batch_sent in train_story]
+                train_end1_matrix = utils.padding(end1)
+                train_end2_matrix = utils.padding(end2)
+
+                train_story_mask = [utils.mask_generator(batch_sent) for batch_sent in train_story]
+                train_end1_mask = utils.mask_generator(end1)
+                train_end2_mask = utils.mask_generator(end2)
                 
-                neg_end_index_matrix = np.random.randint(N_TRAIN_INS, size = (N_BATCH, ))
-                while np.any((np.asarray(batch_index_list) - neg_end_index_matrix) == 0):
-                    neg_end_index_matrix = np.random.randint(N_TRAIN_INS, size = (N_BATCH, ))
-            
-                neg_end = [self.train_ending1[index] for index in neg_end_index_matrix]
 
-                train_story_matrix = [utils.padding(train_story[i]) for i in range(self.story_nsent)]
-                train_ending1_matrix = utils.padding(train_ending1)
-                neg_end_matrix = utils.padding(neg_end)
+                cost, prediction1, prediction2 = self.train_func(train_story_matrices[0], train_story_matrices[1], train_story_matrices[2],
+                                                               train_story_matrices[3], train_end1_matrix, train_end2_matrix,
+                                                               train_story_mask[0], train_story_mask[1], train_story_mask[2],
+                                                               train_story_mask[3], train_end1_mask, train_end2_mask)
 
-                train_story_mask = [utils.mask_generator(train_story[i]) for i in range(self.story_nsent)]
-                train_ending1_mask = utils.mask_generator(train_ending1)
-                neg_end_mask = utils.mask_generator(neg_end)
 
-                cost, cos1, cos2 = self.train_func(train_story_matrix[0],train_story_matrix[1], train_story_matrix[2],
-                                                    train_story_matrix[3] , train_story_mask[0], train_story_mask[1],
-                                                    train_story_mask[2], train_story_mask[3],train_ending1_matrix, 
-                                                    train_ending1_mask, neg_end_matrix, neg_end_mask)
+
+                prediction = np.argmax(np.concatenate((prediction1, prediction2), axis = 1), axis = 1)
+
+                total_err_count += (abs(prediction - answer)).sum()
 
                 total_cost += cost
-                predict_vec = np.argmax(np.concatenate([cos1, cos2], axis = 1), axis = 1).reshape((-1, 1))
-                total_err_count += (abs(predict_vec)).sum()
 
             print "======================================="
             print "epoch summary:"
             print "total cost in this epoch: ", total_cost
-            print "accuracy on training set: ", (1.0-(float(total_err_count) / ((max_batch+1) * N_BATCH))) * 100.0, "%"
+            print "accuracy on training set: ", (1.0-(total_err_count / N_TRAIN_INS)) * 100, "%"
             val_result = self.val_set_test()
-            print "accuracy is: ", val_result*100.0, "%"
+            print "accuracy is: ", val_result*100, "%"
             if val_result > best_val_accuracy:
                 print "new best! test on test set..."
                 best_val_accuracy = val_result
 
             test_accuracy = self.test_set_test()
-            print "test set accuracy: ", test_accuracy * 100.0, "%"
+            print "test set accuracy: ", test_accuracy * 100, "%"
             if test_accuracy > best_test_accuracy:
                 best_test_accuracy = test_accuracy
             print "======================================="
 
 
 
+
 def main(argv):
     wemb_size = None
-    if len(argv) > 5:
-        wemb_size = argv[4]
-    model = DSSM_MLP_Model(argv[0], argv[1], argv[2], argv[3], argv[4], wemb_size)
+    if len(argv) > 6:
+        wemb_size = argv[6]
+    model = DSSM_MLP_Model(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5], wemb_size)
 
 
     print "loading data"
