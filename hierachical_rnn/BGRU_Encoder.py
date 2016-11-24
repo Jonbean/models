@@ -4,7 +4,7 @@ import lasagne
 import numpy as np
 
 class BGRUEncoder(object):
-    def __init__(self, LAYER_1_UNITS, dropout_rate = 0.0, wemb_trainable = 1):
+    def __init__(self, LAYER_1_UNITS, dropout_rate = 0.0, wemb_trainable = 1, mode = 'sequence'):
         self.layer1_units = LAYER_1_UNITS
         self.wemb = None
         self.GRAD_CLIP = 10.
@@ -13,6 +13,7 @@ class BGRUEncoder(object):
         self.l_mask = None
         self.output = None
         self.wemb_trainable = wemb_trainable
+        self.mode = mode
 
     def build_model(self, WordEmbedding_Init = None):
 
@@ -100,7 +101,15 @@ class BGRUEncoder(object):
         # l_pooling = lasagne.layers.GlobalPoolLayer(l_shuffle)
 
         l_out = l_merge
+
+        l_forward_last = lasagne.layers.SliceLayer(l_grurnn, -1, 1)
+        l_backward_last = lasagne.layers.SliceLayer(l_grurnn_back, -1, 1)
+        l_last_out = lasagne.layers.ElemwiseSumLayer([l_forward_last, l_backward_last])
+
         # l_out = lasagne.layers.SliceLayer(l_grurnn, -1, 1)
         #we only record the output(shall we record each layer???)
-        self.output = l_out
-        self.all_params = lasagne.layers.get_all_params(l_out)
+        if self.mode == "sequence":
+            self.output = l_out
+        else:
+            self.output = l_last_out
+        self.all_params = lasagne.layers.get_all_params(self.output)

@@ -21,7 +21,7 @@ class Hierachi_RNN(object):
                  wemb_trainable = 1,
                  learning_rate = 0.001,
                  delta = 1.0,
-                 mode = 'sequence'
+                 mode = 'sequence',
                  wemb_size = None):
         # Initialize Theano Symbolic variable attributes
         self.story_input_variable = None
@@ -90,7 +90,7 @@ class Hierachi_RNN(object):
             self.score_func_nonlin = None
         self.wemb_trainable = bool(int(wemb_trainable))
         self.learning_rate = float(learning_rate)
-        self.mode = mode
+        self.mode = mode 
 
     def encoding_layer(self):
 
@@ -101,33 +101,50 @@ class Hierachi_RNN(object):
                                                         {self.encoder.l_in:self.reshaped_inputs_variables[i], 
                                                          self.encoder.l_mask:self.inputs_masks[i]},
                                                          deterministic = True)
+            if self.mode == 'sequence':
+                self.train_encodinglayer_vecs.append((sent_seq * self.inputs_masks[i].dimshuffle(0,1,'x')).sum(axis = 1) / self.inputs_masks[i].sum(axis = 1, keepdims = True))         
+            else:
+                self.train_encodinglayer_vecs.append(sent_seq)
 
-            self.train_encodinglayer_vecs.append((sent_seq * self.inputs_masks[i].dimshuffle(0,1,'x')).sum(axis = 1) / self.inputs_masks[i].sum(axis = 1, keepdims = True))         
+    # def batch_cosine(self, batch_vectors1, batch_vectors2):
+    #     dot_prod = T.batched_dot(batch_vectors1, batch_vectors2)
 
+    #     batch1_norm = T.sqrt((T.sqr(batch_vectors1)).sum(axis = 1))
+    #     batch2_norm = T.sqrt((T.sqr(batch_vectors1)).sum(axis = 1))
 
-    def batch_cosine(self, batch_vectors1, batch_vectors2):
-        dot_prod = T.batched_dot(batch_vectors1, batch_vectors2)
+    #     batch_cosine_vec = dot_prod/(batch1_norm * batch2_norm)
+    #     return batch_cosine_vec.reshape((-1,1))
 
-        batch1_norm = T.sqrt((T.sqr(batch_vectors1)).sum(axis = 1))
-        batch2_norm = T.sqrt((T.sqr(batch_vectors1)).sum(axis = 1))
+    # def matrix_cos(self, batch_rep1, batch_rep2):
+    #     batch_rep1_broad = batch_rep1 + T.zeros((self.batch_m, self.batch_m, self.rnn_units))
+        
+    #     batch_rep2_broad = batch_rep2 + T.zeros((self.batch_m, self.batch_m, self.rnn_units))
+    #     batch_rep1_reshape = batch_rep1_broad.reshape((-1, self.rnn_units))
+    #     batch_rep2_reshape = batch_rep2_broad.dimshuffle(1,0,2).reshape((-1, self.rnn_units))
 
-        batch_cosine_vec = dot_prod/(batch1_norm * batch2_norm)
-        return batch_cosine_vec.reshape((-1,1))
+    #     batch_dot = (T.batched_dot(batch_rep1_reshape, batch_rep2_reshape)).reshape((self.batch_m, self.batch_m))
+    #     norm1 = T.sqrt(T.sum(T.sqr(batch_rep1), axis = 1))
+    #     norm2 = T.sqrt(T.sum(T.sqr(batch_rep2), axis = 1))
+        
+    #     norm_matrix = T.dot(norm1.reshape((-1,1)),norm2.reshape((1,-1)))
+        
+    #     return batch_dot/norm_matrix
 
-    def matrix_cos(self, batch_rep1, batch_rep2):
+    def matrix_DNN(self, batch_rep1, batch_rep2):
         batch_rep1_broad = batch_rep1 + T.zeros((self.batch_m, self.batch_m, self.rnn_units))
         
-        batch_rep2_broad = batch_rep2 + T.zeros((self.batch_m, self.batch_m, self.rnn_units))
+        batch_rep2_broad = batch_rep2 + T.zeros((self.batch_m, self.batch_m, self.rnn_units))        
         batch_rep1_reshape = batch_rep1_broad.reshape((-1, self.rnn_units))
         batch_rep2_reshape = batch_rep2_broad.dimshuffle(1,0,2).reshape((-1, self.rnn_units))
+        
+        batch_concate_input = T.concatenate([batch_rep1_reshape, batch_rep2_reshape], axis = 1)        
+        batch_score = lasagne.layers.get_output(self.DNN_out, {self.DNN_in: batch_concate_input})
+        return batch_score.reshape((self.batch_m, self.batch_m))
 
-        batch_dot = (T.batched_dot(batch_rep1_reshape, batch_rep2_reshape)).reshape((self.batch_m, self.batch_m))
-        norm1 = T.sqrt(T.sum(T.sqr(batch_rep1), axis = 1))
-        norm2 = T.sqrt(T.sum(T.sqr(batch_rep2), axis = 1))
-        
-        norm_matrix = T.dot(norm1.reshape((-1,1)),norm2.reshape((1,-1)))
-        
-        return batch_dot/norm_matrix
+    def batch_DNN(self, batch_rep1, batch_rep2):
+        batch_concate_input = T.concatenate([batch_rep1, batch_rep2], axis = 1)
+        batch_score = lasagne.layers.get_output(self.DNN_out, {self.DNN_in: batch_concate_input})
+        return batch_score
 
     def model_constructor(self, wemb_size = None):
         self.inputs_variables = []
@@ -139,10 +156,7 @@ class Hierachi_RNN(object):
             self.reshaped_inputs_variables.append(self.inputs_variables[i].dimshuffle(0,1,'x'))
 
         #initialize neural network units
-        self.encoder = BGRU_Encoder.BGRUEncoder(LAYER_1_UNITS = self.rnn_units, 
-                                                dropout_rate = self.dropout_rate, 
-                                                wemb_trainable = self.wemb_trainable, 
-                                                mode = self.mode)
+        self.encoder = BGRU_Encoder.BGRUEncoder(LAYER_1_UNITS = self.rnn_units, dropout_rate = self.dropout_rate, wemb_trainable = self.wemb_trainable, mode = self.mode)
         self.encoder.build_model(self.wemb)
 
         #build encoding layer
@@ -176,24 +190,30 @@ class Hierachi_RNN(object):
         '''
         plot vector and ending vector pairs illustration
 
-        -------------
-        |1,2|1,3|1,4|
-        -------------
-        |2,1|2,3|2,4|
-        -------------
-        |3,1|3,2|3,4|
-        -------------
-        |4,1|4,2|4,3|
-        -------------
+        -----------------
+        |1,1|1,2|1,3|1,4|
+        -----------------
+        |2,1|2,2|2,3|2,4|
+        -----------------
+        |3,1|3,2|3,3|3,4|
+        -----------------
+        |4,1|4,2|4,3|4,4|
+        -----------------
         '''
 
-        
+        self.DNN_in = lasagne.layers.InputLayer(shape=(None, 2*self.rnn_units))
+        l_hid1 = lasagne.layers.DenseLayer(self.DNN_in, num_units = 1024, nonlinearity = lasagne.nonlinearities.tanh)
+
+        self.DNN_out = lasagne.layers.DenseLayer(l_hid1, num_units=1, nonlinearity=self.score_func_nonlin)
+
+        DNN_param = lasagne.layers.get_all_params(self.DNN_out)
+
         self.batch_m, rep_n = reasoner_result.shape
-        score_matrix = self.matrix_cos(reasoner_result, self.train_encodinglayer_vecs[-1]) 
+        score_matrix = self.matrix_DNN(reasoner_result, self.train_encodinglayer_vecs[-1]) 
 
         score1 = T.flatten(T.nlinalg.diag(score_matrix))
 
-        all_other_score_matrix = score_matrix * (T.identity_like(score_matrix) - T.eye(self.batch_m)) + T.eye(self.batch_m) * T.min(score_matrix, axis = 1)
+        all_other_score_matrix = score_matrix * (T.ones_like(score_matrix) - T.eye(self.batch_m)) - T.eye(self.batch_m)
 
         max_other_score = T.max(all_other_score_matrix, axis = 1)
         max_score_index = T.argmax(all_other_score_matrix, axis = 1) 
@@ -204,7 +224,7 @@ class Hierachi_RNN(object):
 
 
         # Retrieve all parameters from the network
-        all_params = self.encoder.all_params + reasoner_params
+        all_params = self.encoder.all_params + reasoner_params + DNN_param
 
         all_updates = lasagne.updates.adam(self.cost, all_params, learning_rate=self.learning_rate)
         # all_updates = lasagne.updates.momentum(self.cost, all_params, learning_rate = 0.05, momentum=0.9)
@@ -220,9 +240,14 @@ class Hierachi_RNN(object):
         encoded_end2_seq = lasagne.layers.get_output(self.encoder.output, {self.encoder.l_in: end2_reshape, 
                                                                        self.encoder.l_mask:mask_end2},
                                                                        deterministic = True)
-        encoded_end2 = (encoded_end2_seq * mask_end2.dimshuffle(0,1,'x')).sum(axis = 1) / mask_end2.sum(axis = 1, keepdims = True)         
-        self.score2 = self.batch_cosine(reasoner_result, encoded_end2)
-        self.score1 = self.batch_cosine(reasoner_result, self.train_encodinglayer_vecs[-1])
+        encoded_end2 = None
+        if self.mode == 'sequence':
+            encoded_end2 = (encoded_end2_seq * mask_end2.dimshuffle(0,1,'x')).sum(axis = 1) / mask_end2.sum(axis = 1, keepdims = True)         
+        else:
+            encoded_end2 = encoded_end2_seq
+
+        self.score2 = self.batch_DNN(reasoner_result, encoded_end2)
+        self.score1 = self.batch_DNN(reasoner_result, self.train_encodinglayer_vecs[-1])
         self.prediction = theano.function(self.inputs_variables + self.inputs_masks + [end2, mask_end2],
                                          [self.score1, self.score2])
         # pydotprint(self.train_func, './computational_graph.png')
@@ -266,40 +291,6 @@ class Hierachi_RNN(object):
         self.ends_pool_ls = np.random.choice(range(self.n_train), 2000, replace = False)
         self.index2word_dict = pickle.load(open(self.index2word_dict_path))
        
-
-    def fake_load_data(self):
-        self.train_story = []
-        self.train_story.append(np.concatenate((np.random.randint(10, size = (50, 10)), 10+np.random.randint(10, size=(50,10))),axis=0).astype('int64'))
-        self.train_story.append(np.ones((100, 10)).astype('int64'))
-        self.train_story.append(np.ones((100, 10)).astype('int64'))
-        self.train_story.append(np.ones((100, 10)).astype('int64'))
-        self.train_story = np.asarray(self.train_story).reshape([100,4,10])
-
-        self.train_ending = np.concatenate((2 * np.ones((50, 5)), np.ones((50, 5))), axis = 0)
-        self.val_story = []
-        self.val_story.append(np.random.randint(10, size = (100, 10)).astype('int64'))
-        self.val_story.append(np.random.randint(10, size = (100, 10)).astype('int64'))
-        self.val_story.append(np.random.randint(10, size = (100, 10)).astype('int64'))
-        self.val_story.append(np.random.randint(10, size = (100, 10)).astype('int64'))
-
-        self.val_ending1 = np.ones((100, 10)).astype('int64')
-        self.val_ending2 = 2*np.ones((100, 10)).astype('int64')
-        self.val_answer = np.zeros(100)
-        self.n_val = self.val_answer.shape[0]
-
-        self.test_story = []
-        self.test_story.append(np.random.randint(20, size = (100, 10)).astype('int64'))
-        self.test_story.append(np.random.randint(20, size = (100, 10)).astype('int64'))
-        self.test_story.append(np.random.randint(20, size = (100, 10)).astype('int64'))
-        self.test_story.append(np.random.randint(20, size = (100, 10)).astype('int64'))
-
-        self.test_ending1 = np.ones((100, 10)).astype('int64')
-        self.test_ending2 = 2*np.ones((100, 10)).astype('int64')
-        self.test_answer = np.ones(100)
-        self.n_test = self.test_answer.shape[0]
-
-
-        self.wemb = theano.shared(np.random.rand(30, self.rnn_units)).astype(theano.config.floatX)
 
 
     def val_set_test(self):
@@ -537,10 +528,7 @@ class Hierachi_RNN(object):
 
 
 def main(argv):
-    wemb_size = None
-    if len(argv) > 7:
-        wemb_size = argv[7]
-    model = Hierachi_RNN(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5], argv[6], wemb_size)
+    model = Hierachi_RNN(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5], argv[6], argv[7])
 
     print "loading data"
     model.load_data()
