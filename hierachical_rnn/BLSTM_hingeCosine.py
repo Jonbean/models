@@ -485,8 +485,8 @@ class Hierachi_RNN(object):
                 total_cost += cost
                 if batch % test_threshold == 0 and batch != 0:
                     train_acc = total_cost/((batch+1) * N_BATCH)*100.0
-                    print "accuracy on training set: ", total_correct_count/((batch+1) * N_BATCH)*100.0, "%"
-                    if train_acc > 60:
+                    print "accuracy on training set: ", train_acc, "%"
+                    if train_acc > 10 or epoch >= 20:
                         print "example score sequence"
                         print np.concatenate((score1.reshape((-1,1)), score2.reshape((-1,1))), axis = 1)
                         print "test on val set..."
