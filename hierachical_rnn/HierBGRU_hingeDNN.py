@@ -138,12 +138,12 @@ class Hierachi_RNN(object):
         batch_rep2_reshape = batch_rep2_broad.dimshuffle(1,0,2).reshape((-1, self.rnn_units))
         
         batch_concate_input = T.concatenate([batch_rep1_reshape, batch_rep2_reshape], axis = 1)        
-        batch_score = lasagne.layers.get_output(self.DNN_out, {self.DNN_in: batch_concate_input})
+        batch_score = lasagne.layers.get_output(self.DNN_out, {self.DNN_in: batch_concate_input}, deterministic = False)
         return batch_score.reshape((self.batch_m, self.batch_m))
 
     def batch_DNN(self, batch_rep1, batch_rep2):
         batch_concate_input = T.concatenate([batch_rep1, batch_rep2], axis = 1)
-        batch_score = lasagne.layers.get_output(self.DNN_out, {self.DNN_in: batch_concate_input})
+        batch_score = lasagne.layers.get_output(self.DNN_out, {self.DNN_in: batch_concate_input}, deterministic = True)
         return batch_score
 
     def model_constructor(self, wemb_size = None):
@@ -202,6 +202,7 @@ class Hierachi_RNN(object):
         '''
 
         self.DNN_in = lasagne.layers.InputLayer(shape=(None, 2*self.rnn_units))
+        l_drop = lasagne.layers.DropoutLayer(self.DNN_in, p = self.dropout_rate)
         l_hid1 = lasagne.layers.DenseLayer(self.DNN_in, num_units = 1024, nonlinearity = lasagne.nonlinearities.tanh)
 
         self.DNN_out = lasagne.layers.DenseLayer(l_hid1, num_units=1, nonlinearity=self.score_func_nonlin)
