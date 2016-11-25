@@ -180,11 +180,11 @@ class Hierachi_RNN(object):
             story = np.asarray(self.val_story[k], dtype='int64').reshape((1,-1))
             story_mask = np.ones((1,len(self.val_story[k])))
 
-            ending1 = np.asarray(self.test_ending1[k], dtype='int64').reshape((1,-1))
-            ending1_mask = np.ones((1,len(self.test_ending1[k])))
+            ending1 = np.asarray(self.val_ending1[k], dtype='int64').reshape((1,-1))
+            ending1_mask = np.ones((1,len(self.val_ending1[k])))
 
-            ending2 = np.asarray(self.test_ending2[k], dtype='int64').reshape((1,-1))
-            ending2_mask = np.ones((1, len(self.test_ending2[k])))
+            ending2 = np.asarray(self.val_ending2[k], dtype='int64').reshape((1,-1))
+            ending2_mask = np.ones((1, len(self.val_ending2[k])))
 
             score1, score2 = self.prediction(story,
                                              ending1, 
