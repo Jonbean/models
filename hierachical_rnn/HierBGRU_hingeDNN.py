@@ -167,17 +167,38 @@ class Hierachi_RNN(object):
         self.merge_ls = [T.reshape(tensor, (tensor.shape[0], 1, tensor.shape[1])) for tensor in self.train_encodinglayer_vecs[:-1]]
 
         encode_merge = T.concatenate(self.merge_ls, axis = 1)
+
+        gate_parameters = lasagne.layers.recurrent.Gate(W_in=lasagne.init.Orthogonal(), 
+                                                            W_hid=lasagne.init.Orthogonal(),
+                                                        W_cell=None,
+                                                        b=lasagne.init.Constant(0.001))
+        hidden_parameter = lasagne.layers.recurrent.Gate(W_in=lasagne.init.Orthogonal(), 
+                                                        W_hid=lasagne.init.Orthogonal(),
+                                                        W_cell=None,
+                                                        b=lasagne.init.Constant(0.001),
+                                                        nonlinearity=lasagne.nonlinearities.tanh)
+
+
         l_in = lasagne.layers.InputLayer(shape=(None, None, self.rnn_units))
 
-        l_gru = lasagne.layers.recurrent.GRULayer(l_in, num_units=self.rnn_units, backwards=False,
-                                                    learn_init=True, 
-                                                    gradient_steps=-1,
-                                                    precompute_input=True)
+        l_gru = lasagne.layers.recurrent.GRULayer(l_in, num_units=self.rnn_units,
+                                                  resetgate = gate_parameters,
+                                                  updategate = gate_parameters,
+                                                  hidden_update = hidden_parameter,
+                                                  backwards=False,
+                                                  learn_init=True, grad_clipping=10.,
+                                                  gradient_steps=-1,
+                                                  precompute_input=True)
 
-        l_gru_back = lasagne.layers.recurrent.GRULayer(l_in, num_units=self.rnn_units, backwards=True,
-                                                    learn_init=True, 
-                                                    gradient_steps=-1,
-                                                    precompute_input=True)
+        l_gru_back = lasagne.layers.recurrent.GRULayer(l_in, 
+                                                       num_units=self.rnn_units,
+                                                       resetgate = gate_parameters,
+                                                       updategate = gate_parameters,
+                                                       hidden_update = hidden_parameter,
+                                                       backwards=True,
+                                                       learn_init=True, grad_clipping = 10.,
+                                                       gradient_steps=-1,
+                                                       precompute_input=True)
 
         # Do sum up of bidirectional LSTM results
         l_out_right = lasagne.layers.SliceLayer(l_gru, -1, 1)
@@ -203,7 +224,7 @@ class Hierachi_RNN(object):
 
         self.DNN_in = lasagne.layers.InputLayer(shape=(None, 2*self.rnn_units))
         l_drop = lasagne.layers.DropoutLayer(self.DNN_in, p = self.dropout_rate)
-        l_hid1 = lasagne.layers.DenseLayer(self.DNN_in, num_units = 1024, nonlinearity = lasagne.nonlinearities.tanh)
+        l_hid1 = lasagne.layers.DenseLayer(l_drop, num_units = 1024, nonlinearity = lasagne.nonlinearities.tanh)
 
         self.DNN_out = lasagne.layers.DenseLayer(l_hid1, num_units=1, nonlinearity=self.score_func_nonlin)
 
@@ -231,7 +252,7 @@ class Hierachi_RNN(object):
         # all_updates = lasagne.updates.momentum(self.cost, all_params, learning_rate = 0.05, momentum=0.9)
 
         self.train_func = theano.function(self.inputs_variables + self.inputs_masks, 
-                                        [self.cost, score1, max_other_score, max_score_index, all_other_score_matrix], updates = all_updates)
+                                        [self.cost, score1, max_other_score, max_score_index, all_other_score_matrix, score_matrix], updates = all_updates)
 
         # test ending2
         end2 = T.matrix(name = "test_end2", dtype = 'int64')
@@ -472,12 +493,10 @@ class Hierachi_RNN(object):
                 # train_end2_mask = utils.mask_generator(end2)
 
 
-                cost, score1, score2, max_score_index, all_other_score_matrix = self.train_func(train_story_matrices[0], train_story_matrices[1], train_story_matrices[2],
+                cost, score1, score2, max_score_index, all_other_score_matrix, score_matrix = self.train_func(train_story_matrices[0], train_story_matrices[1], train_story_matrices[2],
                                                                train_story_matrices[3], train_end_matrix,
                                                                train_story_mask[0], train_story_mask[1], train_story_mask[2],
                                                                train_story_mask[3], train_end_mask)
-
-
 
                 total_correct_count += np.count_nonzero((score1 - score2).clip(0.0))
 
