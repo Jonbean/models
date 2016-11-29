@@ -21,7 +21,8 @@ class Hierachi_RNN(object):
                  wemb_trainable = 1,
                  learning_rate = 0.001,
                  delta = 1.0,
-                 mode = 'sequence'
+                 mode = 'sequence',
+                 sampling_strategy = 'plot_cos',
                  wemb_size = None):
         # Initialize Theano Symbolic variable attributes
         self.story_input_variable = None
@@ -91,6 +92,7 @@ class Hierachi_RNN(object):
         self.wemb_trainable = bool(int(wemb_trainable))
         self.learning_rate = float(learning_rate)
         self.mode = mode
+        self.sampling_strategy = sampling_strategy
 
     def encoding_layer(self):
 
@@ -542,11 +544,9 @@ class Hierachi_RNN(object):
             print "======================================="
 
 
-def main(argv):
-    wemb_size = None
-    if len(argv) > 7:
-        wemb_size = argv[7]
-    model = Hierachi_RNN(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5], argv[6], wemb_size)
+   
+if __name__ == '__main__':
+    model = Hierachi_RNN(*sys.argv[1:])
 
     print "loading data"
     model.load_data()
@@ -558,7 +558,4 @@ def main(argv):
     print "training begin!"
     model.begin_train()
     
-if __name__ == '__main__':
-    main(sys.argv[1:])
-
 
