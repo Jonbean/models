@@ -85,14 +85,15 @@ class Hierachi_RNN(object):
         self.train_encodinglayer_vecs = []
 
         self.delta = float(delta)
-        if score_func_nonlin == 'default':
-            self.score_func_nonlin = lasagne.nonlinearities.tanh
-        else:
+        self.score_func_nonlin = lasagne.nonlinearities.tanh
+        if score_func_nonlin == 'None':
             self.score_func_nonlin = None
+        
         self.wemb_trainable = bool(int(wemb_trainable))
         self.learning_rate = float(learning_rate)
         self.mode = mode
         self.sampling_strategy = sampling_strategy
+        self.GRAD_CLIP = 10.0
 
     def encoding_layer(self):
 
@@ -135,7 +136,7 @@ class Hierachi_RNN(object):
         self.inputs_variables = []
         self.inputs_masks = []
         self.reshaped_inputs_variables = []
-        for i in range(self.story_nsent+1):
+        for i in range(self.story_nsent+2):
             self.inputs_variables.append(T.matrix('story'+str(i)+'_input', dtype='int64'))
             self.inputs_masks.append(T.matrix('story'+str(i)+'_mask', dtype=theano.config.floatX))
             self.reshaped_inputs_variables.append(self.inputs_variables[i].dimshuffle(0,1,'x'))
@@ -152,22 +153,39 @@ class Hierachi_RNN(object):
 
         #build reasoning layers
 
-        self.merge_ls = [T.reshape(tensor, (tensor.shape[0], 1, tensor.shape[1])) for tensor in self.train_encodinglayer_vecs[:-1]]
+        self.merge_ls = [T.reshape(tensor, (tensor.shape[0], 1, tensor.shape[1])) for tensor in self.train_encodinglayer_vecs[:4]]
 
         encode_merge = T.concatenate(self.merge_ls, axis = 1)
         l_in = lasagne.layers.InputLayer(shape=(None, None, self.rnn_units))
+        gate_parameters = lasagne.layers.recurrent.Gate(W_in=lasagne.init.Orthogonal(), 
+                                                        W_hid=lasagne.init.Orthogonal(),
+                                                        W_cell=None,
+                                                        b=lasagne.init.Constant(0.001))
+        hidden_parameter = lasagne.layers.recurrent.Gate(W_in=lasagne.init.Orthogonal(), 
+                                                        W_hid=lasagne.init.Orthogonal(),
+                                                        W_cell=None,
+                                                        b=lasagne.init.Constant(0.001),
+                                                        nonlinearity=lasagne.nonlinearities.tanh)
 
-        l_gru = lasagne.layers.recurrent.GRULayer(l_in, num_units=self.rnn_units, backwards=False,
+        # The LSTM layer should have the same mask input in order to avoid padding entries
+        l_gru = lasagne.layers.recurrent.GRULayer(l_in, num_units=self.rnn_units, resetgate=gate_parameters,
+                                                    updategate=gate_parameters, hidden_update=hidden_parameter,
+                                                    backwards=False,
                                                     learn_init=True, 
-                                                    gradient_steps=-1,
-                                                    precompute_input=True)
+                                                    gradient_steps=-1, grad_clipping=self.GRAD_CLIP, 
+                                                    precompute_input=True
+                                                    )
 
-        l_gru_back = lasagne.layers.recurrent.GRULayer(l_in, num_units=self.rnn_units, backwards=True,
+        l_gru_back = lasagne.layers.recurrent.GRULayer(l_in, num_units=self.rnn_units, resetgate=gate_parameters,
+                                                    updategate=gate_parameters, hidden_update=hidden_parameter,
+                                                    backwards=True,
                                                     learn_init=True, 
-                                                    gradient_steps=-1,
-                                                    precompute_input=True)
+                                                    gradient_steps=-1, grad_clipping=self.GRAD_CLIP, 
+                                                    precompute_input=True
+                                                    )
 
-        # Do sum up of bidirectional LSTM results
+
+             # Do sum up of bidirectional LSTM results
         l_out_right = lasagne.layers.SliceLayer(l_gru, -1, 1)
         l_out_left = lasagne.layers.SliceLayer(l_gru_back, -1, 1)
         l_sum = lasagne.layers.ElemwiseSumLayer([l_out_right, l_out_left])
@@ -193,17 +211,17 @@ class Hierachi_RNN(object):
         self.batch_m, rep_n = reasoner_result.shape
         simiscore_matrix = None
         if self.sampling_strategy == "end_cos":
-            simiscore_matrix = self.matrix_cos(self.train_encodinglayer_vecs[-1], self.train_encodinglayer_vecs)
+            simiscore_matrix = self.matrix_cos(self.train_encodinglayer_vecs[4], self.train_encodinglayer_vecs[4])
         elif self.sampling_strategy == "plot_cos":
             simiscore_matrix = self.matrix_cos(reasoner_result, reasoner_result)
-        elif self.sampling_strategy == "combine_cos":
-            simiscore_matrix = self.matrix_cos(easoner_result, reasoner_result) + self.matrix_cos(self.train_encodinglayer_vecs[-1], self.train_encodinglayer_vecs)
-        all_other_simiscore_matrix = simiscore_matrix * (T.ones_like(simiscore_matrix) - T.eye(self.batch_m))
+        else: 
+            simiscore_matrix = self.matrix_cos(reasoner_result, reasoner_result) + self.matrix_cos(self.train_encodinglayer_vecs[4], self.train_encodinglayer_vecs[4])
+        all_other_simiscore_matrix = simiscore_matrix * (T.ones_like(simiscore_matrix) - T.eye(self.batch_m)) - T.eye(self.batch_m)
+        score2 = T.max(all_other_simiscore_matrix, axis = 1)
         max_simi_index = T.argmax(all_other_simiscore_matrix, axis = 1)
 
-        score2 = self.batch_cosine(reasoner_result, self.train_encodinglayer_vecs[-1][max_simi_index])
-        score1 = self.batch_cosine(reasoner_result, self.train_encodinglayer_vecs[-1])
-
+        score1 = self.batch_cosine(reasoner_result, self.train_encodinglayer_vecs[4])
+        
 
         final_score = - score1 + self.delta + score2
 
@@ -217,22 +235,22 @@ class Hierachi_RNN(object):
         all_updates = lasagne.updates.adam(self.cost, all_params, learning_rate=self.learning_rate)
         # all_updates = lasagne.updates.momentum(self.cost, all_params, learning_rate = 0.05, momentum=0.9)
 
-        self.train_func = theano.function(self.inputs_variables + self.inputs_masks, 
-                                        [self.cost, score1, score2, max_simi_index, all_other_simiscore_matrix], updates = all_updates)
+        self.train_func = theano.function(self.inputs_variables[:5] + self.inputs_masks[:5], 
+                                         [self.cost, score1, score2, max_simi_index, all_other_simiscore_matrix], updates = all_updates)
 
         # test ending2
-        end2 = T.matrix(name = "test_end2", dtype = 'int64')
-        mask_end2 = T.matrix(name="test_mask2", dtype = theano.config.floatX)
-        end2_reshape = end2.dimshuffle(0,1,'x')
+        end2_seq = lasagne.layers.get_output(self.encoder.output,
+                                                        {self.encoder.l_in:self.reshaped_inputs_variables[5], 
+                                                         self.encoder.l_mask:self.inputs_masks[5]},
+                                                         deterministic = True)
 
-        encoded_end2_seq = lasagne.layers.get_output(self.encoder.output, {self.encoder.l_in: end2_reshape, 
-                                                                       self.encoder.l_mask:mask_end2},
-                                                                       deterministic = True)
-        encoded_end2 = (encoded_end2_seq * mask_end2.dimshuffle(0,1,'x')).sum(axis = 1) / mask_end2.sum(axis = 1, keepdims = True)         
-        self.score2 = self.batch_cosine(reasoner_result, encoded_end2)
+        end2_rep = (end2_seq * self.inputs_masks[5].dimshuffle(0,1,'x')).sum(axis = 1) / self.inputs_masks[5].sum(axis = 1, keepdims = True)
+
+               
+        self.score2 = self.batch_cosine(reasoner_result, end2_rep)
         self.score1 = self.batch_cosine(reasoner_result, self.train_encodinglayer_vecs[-1])
-        self.prediction = theano.function(self.inputs_variables + self.inputs_masks + [end2, mask_end2],
-                                         [self.score1, self.score2])
+        self.prediction = theano.function(self.inputs_variables + self.inputs_masks,
+                                         [self.score1, self.score2]) 
         # pydotprint(self.train_func, './computational_graph.png')
 
     def load_data(self):
@@ -332,8 +350,8 @@ class Hierachi_RNN(object):
             ending2_mask = utils.mask_generator(ending2_ls)
 
             score1, score2 = self.prediction(story_matrix[0], story_matrix[1], story_matrix[2], story_matrix[3], 
-                                    ending1_matrix, story_mask[0], story_mask[1], story_mask[2],
-                                    story_mask[3], ending1_mask, ending2_matrix, ending2_mask)
+                                    ending1_matrix, ending2_matrix, story_mask[0], story_mask[1], story_mask[2],
+                                    story_mask[3], ending1_mask, ending2_mask)
 
             # Answer denotes the index of the anwer
             prediction = np.argmax(np.concatenate((score1, score2), axis=1), axis=1)
@@ -351,8 +369,8 @@ class Hierachi_RNN(object):
             ending2_mask = np.ones((1, len(self.val_ending2[k])))
 
             score1, score2 = self.prediction(story[0], story[1], story[2], story[3], 
-                                    ending1, story_mask[0], story_mask[1], story_mask[2],
-                                    story_mask[3], ending1_mask, ending2, ending2_mask)
+                                    ending1, ending2, story_mask[0], story_mask[1], story_mask[2],
+                                    story_mask[3], ending1_mask, ending2_mask)
             # Answer denotes the index of the anwer
             prediction = np.argmax(np.concatenate((score1, score2), axis=1))
 
@@ -381,8 +399,8 @@ class Hierachi_RNN(object):
             ending2_mask = utils.mask_generator(ending2_ls)
 
             score1, score2 = self.prediction(story_matrix[0], story_matrix[1], story_matrix[2], story_matrix[3], 
-                                    ending1_matrix, story_mask[0], story_mask[1], story_mask[2],
-                                    story_mask[3], ending1_mask, ending2_matrix, ending2_mask)
+                                    ending1_matrix, ending2_matrix, story_mask[0], story_mask[1], story_mask[2],
+                                    story_mask[3], ending1_mask, ending2_mask)
 
             # Answer denotes the index of the anwer
             prediction = np.argmax(np.concatenate((score1, score2), axis=1), axis=1)
@@ -400,8 +418,8 @@ class Hierachi_RNN(object):
             ending2_mask = np.ones((1, len(self.test_ending2[k])))
 
             score1, score2 = self.prediction(story[0], story[1], story[2], story[3], 
-                                    ending1, story_mask[0], story_mask[1], story_mask[2],
-                                    story_mask[3], ending1_mask, ending2, ending2_mask)
+                                    ending1, ending2, story_mask[0], story_mask[1], story_mask[2],
+                                    story_mask[3], ending1_mask, ending2_mask)
             # Answer denotes the index of the anwer
             prediction = np.argmax(np.concatenate((score1, score2), axis=1))
 
@@ -488,8 +506,8 @@ class Hierachi_RNN(object):
                 # train_end2_mask = utils.mask_generator(end2)
 
 
-                cost, score1, score2, max_score_index, all_other_score_matrix = self.train_func(train_story_matrices[0], train_story_matrices[1], train_story_matrices[2],
-                                                               train_story_matrices[3], train_end_matrix,
+                cost, score1, score2, max_score_index, all_other_score_matrix = self.train_func(train_story_matrices[0], train_story_matrices[1],
+                                                               train_story_matrices[2],train_story_matrices[3], train_end_matrix,
                                                                train_story_mask[0], train_story_mask[1], train_story_mask[2],
                                                                train_story_mask[3], train_end_mask)
 
