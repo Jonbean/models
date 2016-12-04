@@ -4,11 +4,10 @@ import lasagne
 import numpy as np
 
 class BGRUEncoder(object):
-    def __init__(self, LAYER_1_UNITS, dropout_rate = 0.0, wemb_trainable = 1, mode = 'sequence'):
+    def __init__(self, LAYER_1_UNITS, wemb_trainable = 1, mode = 'sequence'):
         self.layer1_units = LAYER_1_UNITS
         self.wemb = None
         self.GRAD_CLIP = 10.
-        self.dropout_rate = dropout_rate
         self.l_in = None
         self.l_mask = None
         self.output = None
@@ -35,7 +34,7 @@ class BGRUEncoder(object):
         if not self.wemb_trainable:
             l_emb.params[l_emb.W].remove('trainable')
 
-        l_drop = lasagne.layers.DropoutLayer(l_emb, p = self.dropout_rate)
+        #l_drop = lasagne.layers.DropoutLayer(l_emb, p = self.dropout_rate)
         #setting gates and cell parameters with specific nonlinearity functions
         # gate_parameters = lasagne.layers.recurrent.Gate(W_in=lasagne.init.Orthogonal(), 
         #                                                 W_hid=lasagne.init.Orthogonal(),
@@ -73,7 +72,7 @@ class BGRUEncoder(object):
                                                         nonlinearity=lasagne.nonlinearities.tanh)
 
         # The LSTM layer should have the same mask input in order to avoid padding entries
-        l_grurnn = lasagne.layers.recurrent.GRULayer(l_drop, num_units=self.layer1_units, resetgate=gate_parameters,
+        l_grurnn = lasagne.layers.recurrent.GRULayer(l_emb, num_units=self.layer1_units, resetgate=gate_parameters,
                                                     updategate=gate_parameters, hidden_update=hidden_parameter,
                                                     backwards=False,
                                                     learn_init=True, 
@@ -81,7 +80,7 @@ class BGRUEncoder(object):
                                                     precompute_input=True, mask_input=self.l_mask
                                                     )
 
-        l_grurnn_back = lasagne.layers.recurrent.GRULayer(l_drop, num_units=self.layer1_units, resetgate=gate_parameters,
+        l_grurnn_back = lasagne.layers.recurrent.GRULayer(l_emb, num_units=self.layer1_units, resetgate=gate_parameters,
                                                     updategate=gate_parameters, hidden_update=hidden_parameter,
                                                     backwards=True,
                                                     learn_init=True, 
