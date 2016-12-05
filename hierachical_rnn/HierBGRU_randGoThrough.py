@@ -262,8 +262,7 @@ class Hierachi_RNN(object):
         else:
             encoded_end2 = encoded_end2_seq
 
-        merge_ls2  = [T.reshape(tensor, (tensor.shape[0], 1, tensor.shape[1])) for tensor in self.train_encodinglayer_vecs[:-1]]
-                   + [T.reshape(encoded_end2, (encoded_end2.shape[0], 1, encoded_end2.shape[1]))]
+        merge_ls2  = [T.reshape(tensor, (tensor.shape[0], 1, tensor.shape[1])) for tensor in self.train_encodinglayer_vecs[:-1]] + [T.reshape(encoded_end2, (encoded_end2.shape[0], 1, encoded_end2.shape[1]))]
         reasoner_result3 = lasagne.layers.get_output(l_sum, {l_in: merge_ls2}, deterministic = True)
         self.score2 = lasagne.get_output(self.DNN.output,{self.DNN.l_in: reasoner_result3})
 
