@@ -13,7 +13,7 @@ import sys
 
 
 class Hierachi_RNN(object):
-    def __init__(self, rnn_setting, dropout_rate, batchsize, delta, learning_rate = 0.001, wemb_trainable = '1', wemb_size = None):
+    def __init__(self, rnn_setting, batchsize, delta, learning_rate = 0.001, wemb_trainable = '1', wemb_size = None):
         # Initialize Theano Symbolic variable attributes
         self.story_input_variable = None
         self.story_mask = None
@@ -47,7 +47,6 @@ class Hierachi_RNN(object):
         self.wemb_matrix_path = '../../data/pickles/index_wemb_matrix.pkl'
         self.rnn_units = int(rnn_setting)
         # self.mlp_units = [int(elem) for elem in mlp_setting.split('x')]
-        self.dropout_rate = float(dropout_rate)
         self.batchsize = int(batchsize)
         self.learning_rate = float(learning_rate)
         self.wemb_trainable = bool(int(wemb_trainable))
@@ -102,7 +101,7 @@ class Hierachi_RNN(object):
             self.reshaped_inputs_variables.append(self.inputs_variables[i].reshape([batch_size, seqlen, 1]))
 
         #initialize neural network units
-        self.encoder = BGRU_Encoder.BGRUEncoder(LAYER_1_UNITS = self.rnn_units, dropout_rate = self.dropout_rate, wemb_trainable =self.wemb_trainable)
+        self.encoder = BGRU_Encoder.BGRUEncoder(LAYER_1_UNITS = self.rnn_units, wemb_trainable =self.wemb_trainable)
         self.encoder.build_model(self.wemb)
 
         #build encoding layer
@@ -397,13 +396,10 @@ class Hierachi_RNN(object):
                 best_test_accuracy = test_accuracy
             print "======================================="
 
-
-def main(argv):
-    wemb_size = None
-    if len(argv) > 6:
-        wemb_size = argv[6]
-    model = Hierachi_RNN(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5], wemb_size)
-
+   
+if __name__ == '__main__':
+    model = Hierachi_RNN(*sys.argv[1:])
+            
     print "loading data"
     model.load_data()
 
@@ -413,8 +409,5 @@ def main(argv):
 
     print "training begin!"
     model.begin_train()
-    
-if __name__ == '__main__':
-    main(sys.argv[1:])
-
+ 
 
