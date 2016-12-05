@@ -7,6 +7,7 @@ import time
 import utils
 import cPickle as pickle
 import BGRU_Encoder
+import DNN_score_function as DNN
 import sys
 # from theano.printing import pydotprint
 
@@ -15,7 +16,7 @@ import sys
 class Hierachi_RNN(object):
     def __init__(self, 
                  rnn_setting, 
-                 dropout_rate, 
+                 DNN_settings, 
                  batchsize, 
                  score_func_nonlin = 'default',
                  wemb_trainable = 1,
@@ -55,8 +56,8 @@ class Hierachi_RNN(object):
         self.index2word_dict_path = '../../data/pickles/ROC_train_index_dict.pkl'
 
         self.rnn_units = int(rnn_setting)
-        # self.mlp_units = [int(elem) for elem in mlp_setting.split('x')]
-        self.dropout_rate = float(dropout_rate)
+        self.DNN_settings = [int(elem) for elem in DNN_settings.split('x')]
+        # self.dropout_rate = float(dropout_rate)
         self.batchsize = int(batchsize)
         # self.reasoning_depth = int(reasoning_depth)
         self.wemb_size = 300
@@ -156,7 +157,7 @@ class Hierachi_RNN(object):
             self.reshaped_inputs_variables.append(self.inputs_variables[i].dimshuffle(0,1,'x'))
 
         #initialize neural network units
-        self.encoder = BGRU_Encoder.BGRUEncoder(LAYER_1_UNITS = self.rnn_units, dropout_rate = self.dropout_rate, wemb_trainable = self.wemb_trainable, mode = self.mode)
+        self.encoder = BGRU_Encoder.BGRUEncoder(LAYER_1_UNITS = self.rnn_units, wemb_trainable = self.wemb_trainable, mode = self.mode)
         self.encoder.build_model(self.wemb)
 
         #build encoding layer
@@ -169,7 +170,7 @@ class Hierachi_RNN(object):
         encode_merge = T.concatenate(self.merge_ls, axis = 1)
 
         gate_parameters = lasagne.layers.recurrent.Gate(W_in=lasagne.init.Orthogonal(), 
-                                                            W_hid=lasagne.init.Orthogonal(),
+                                                        W_hid=lasagne.init.Orthogonal(),
                                                         W_cell=None,
                                                         b=lasagne.init.Constant(0.001))
         hidden_parameter = lasagne.layers.recurrent.Gate(W_in=lasagne.init.Orthogonal(), 
@@ -222,13 +223,7 @@ class Hierachi_RNN(object):
         -----------------
         '''
 
-        self.DNN_in = lasagne.layers.InputLayer(shape = (None, 2*self.rnn_units))
-        l_drop = lasagne.layers.DropoutLayer(self.DNN_in, p = self.dropout_rate)
-        l_hid1 = lasagne.layers.DenseLayer(l_drop, num_units = 1024, nonlinearity = lasagne.nonlinearities.tanh)
-
-        self.DNN_out = lasagne.layers.DenseLayer(l_hid1, num_units = 1, nonlinearity = self.score_func_nonlin)
-
-        DNN_param = lasagne.layers.get_all_params(self.DNN_out)
+        self.DNN = DNN.DNN(INPUTS_SIZE = self.rnn_units, LAYER_UNITS = self.DNN_settings, INPUTS_PARTS = 2)
 
         self.batch_m, rep_n = reasoner_result.shape
         score_matrix = self.matrix_DNN(reasoner_result, self.train_encodinglayer_vecs[-1]) 
@@ -246,10 +241,12 @@ class Hierachi_RNN(object):
 
 
         # Retrieve all parameters from the network
-        all_params = self.encoder.all_params + reasoner_params + DNN_param
+        all_params = self.encoder.all_params + reasoner_params + self.DNN.all_params
 
-        all_updates = lasagne.updates.adam(self.cost, all_params, learning_rate = self.learning_rate)
+        all_updates = lasagne.updates.rmsprop(self.cost, all_params)
+        # all_updates = lasagne.updates.adam(self.cost, all_params, learning_rate = self.learning_rate)
         # all_updates = lasagne.updates.momentum(self.cost, all_params, learning_rate = 0.05, momentum=0.9)
+
 
         self.train_func = theano.function(self.inputs_variables + self.inputs_masks, 
                                          [self.cost, score1, max_other_score, max_score_index, all_other_score_matrix, score_matrix], updates = all_updates)

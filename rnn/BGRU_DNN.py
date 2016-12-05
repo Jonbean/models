@@ -164,7 +164,7 @@ class Hierachi_RNN(object):
 
 
         # Retrieve all parameters from the network
-        all_params = self.encoder.all_params 
+        all_params = self.encoder.all_params + self.DNN.all_params
 
         all_updates = lasagne.updates.adam(self.cost, all_params, learning_rate=self.learning_rate)
         # all_updates = lasagne.updates.momentum(self.cost, all_params, learning_rate = 0.05, momentum=0.9)
