@@ -222,11 +222,11 @@ class Hierachi_RNN(object):
         -----------------
         '''
 
-        self.DNN_in = lasagne.layers.InputLayer(shape=(None, 2*self.rnn_units))
+        self.DNN_in = lasagne.layers.InputLayer(shape = (None, 2*self.rnn_units))
         l_drop = lasagne.layers.DropoutLayer(self.DNN_in, p = self.dropout_rate)
         l_hid1 = lasagne.layers.DenseLayer(l_drop, num_units = 1024, nonlinearity = lasagne.nonlinearities.tanh)
 
-        self.DNN_out = lasagne.layers.DenseLayer(l_hid1, num_units=1, nonlinearity=self.score_func_nonlin)
+        self.DNN_out = lasagne.layers.DenseLayer(l_hid1, num_units = 1, nonlinearity = self.score_func_nonlin)
 
         DNN_param = lasagne.layers.get_all_params(self.DNN_out)
 
@@ -248,15 +248,15 @@ class Hierachi_RNN(object):
         # Retrieve all parameters from the network
         all_params = self.encoder.all_params + reasoner_params + DNN_param
 
-        all_updates = lasagne.updates.adam(self.cost, all_params, learning_rate=self.learning_rate)
+        all_updates = lasagne.updates.adam(self.cost, all_params, learning_rate = self.learning_rate)
         # all_updates = lasagne.updates.momentum(self.cost, all_params, learning_rate = 0.05, momentum=0.9)
 
         self.train_func = theano.function(self.inputs_variables + self.inputs_masks, 
-                                        [self.cost, score1, max_other_score, max_score_index, all_other_score_matrix, score_matrix], updates = all_updates)
+                                         [self.cost, score1, max_other_score, max_score_index, all_other_score_matrix, score_matrix], updates = all_updates)
 
         # test ending2
         end2 = T.matrix(name = "test_end2", dtype = 'int64')
-        mask_end2 = T.matrix(name="test_mask2", dtype = theano.config.floatX)
+        mask_end2 = T.matrix(name = "test_mask2", dtype = theano.config.floatX)
         end2_reshape = end2.dimshuffle(0,1,'x')
 
         encoded_end2_seq = lasagne.layers.get_output(self.encoder.output, {self.encoder.l_in: end2_reshape, 

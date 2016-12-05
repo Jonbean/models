@@ -14,7 +14,12 @@ import sys
 
 
 class Hierachi_RNN(object):
-    def __init__(self, rnn_setting, dropout_rate, batchsize, val_split_ratio, wemb_size = None):
+    def __init__(self, 
+                 rnn_setting, 
+                 dropout_rate, 
+                 batchsize, 
+                 val_split_ratio, 
+                 wemb_size = None):
         # Initialize Theano Symbolic variable attributes
         self.story_input_variable = None
         self.story_mask = None
@@ -62,14 +67,7 @@ class Hierachi_RNN(object):
         self.n_test = None
 
         self.train_encodinglayer_vecs = []
-        self.test_encodinglayer_vecs = []
-        self.reasoninglayer_vec1 = []
-        self.reasoninglayer_vec2 = []
-        self.reasoninglayer_vec1_test = []
-        self.reasoninglayer_vec2_test = []
-        self.reasoning_pool_results = []
-        self.reasoning_pool_results_test = []
-        self.reasoners = []
+
         self.attentioned_sent_rep1 = []
         self.attentioned_sent_rep2 = []
 
@@ -195,20 +193,9 @@ class Hierachi_RNN(object):
 
         reasoner_params = lasagne.layers.get_all_params(l_sum)
 
-        # l_story_in = lasagne.layers.InputLayer(shape = (None, self.rnn_units))
-        # l_end_in = lasagne.layers.InputLayer(shape = (None, self.rnn_units))
-        # l_concate = lasagne.layers.ConcatLayer([l_story_in, l_end_in], axis = 1)
-
-        # l_hid = lasagne.layers.DenseLayer(l_concate, num_units=2,
-        #                                   nonlinearity=lasagne.nonlinearities.tanh)
-
-        # final_class_param = lasagne.layers.get_all_params(l_hid)
-
         score1 = T.batched_dot(T.dot(reasoner_result1, self.bilinear_matrix), self.train_encodinglayer_vecs[4])
         score2 = T.batched_dot(T.dot(reasoner_result2, self.bilinear_matrix), self.train_encodinglayer_vecs[5])
 
-        # score2 = lasagne.layers.get_output(l_hid, {l_story_in: reasoner_result, 
-        #                                            l_end_in: self.train_encodinglayer_vecs[-1]})
         prob = T.nnet.softmax(T.concatenate([score1.reshape([-1, 1]), score2.reshape([-1, 1])], axis = 1))
         # Construct symbolic cost function
         target = T.vector('gold_target', dtype= 'int64')
