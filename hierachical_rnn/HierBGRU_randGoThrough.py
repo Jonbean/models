@@ -97,13 +97,13 @@ class Hierachi_RNN(object):
 
 
         assert len(self.reshaped_inputs_variables)==len(self.inputs_masks)
-        for i in range(self.story_nsent+1):
+        for i in range(self.story_nsent+2):
             sent_seq = lasagne.layers.get_output(self.encoder.output,
                                                         {self.encoder.l_in:self.reshaped_inputs_variables[i], 
                                                          self.encoder.l_mask:self.inputs_masks[i]},
                                                          deterministic = True)
             if self.mode == 'sequence':
-                self.train_encodinglayer_vecs.append((sent_seq * self.inputs_masks[i].dimshuffle(0,1,'x')).sum(axis = 1) / self.inputs_masks[i].sum(axis = 1, keepdims = True))         
+                self.train_encodinglayer_vecs.append((sent_seq * (self.inputs_masks[i].dimshuffle(0,1,'x'))).sum(axis = 1) / (self.inputs_masks[i].sum(axis = 1, keepdims = True)))         
             else:
                 self.train_encodinglayer_vecs.append(sent_seq)
 
@@ -151,12 +151,11 @@ class Hierachi_RNN(object):
         self.inputs_variables = []
         self.inputs_masks = []
         self.reshaped_inputs_variables = []
-        for i in range(self.story_nsent+1):
+        for i in range(self.story_nsent+2):
             self.inputs_variables.append(T.matrix('story'+str(i)+'_input', dtype='int64'))
             self.inputs_masks.append(T.matrix('story'+str(i)+'_mask', dtype=theano.config.floatX))
             self.reshaped_inputs_variables.append(self.inputs_variables[i].dimshuffle(0,1,'x'))
 
-        self.rand_index = T.vector('shuffle_index', dtype = 'int64')
 
         #initialize neural network units
         self.encoder = BGRU_Encoder.BGRUEncoder(LAYER_1_UNITS = self.rnn_units, wemb_trainable = self.wemb_trainable, mode = self.mode)
@@ -166,12 +165,6 @@ class Hierachi_RNN(object):
         self.encoding_layer()
 
         #build reasoning layers
-
-        merge_ls = [T.reshape(tensor, (tensor.shape[0], 1, tensor.shape[1])) for tensor in self.train_encodinglayer_vecs]
-        merge_ls_neg = [T.reshape(tensor, (tensor.shape[0], 1, tensor.shape[1])) for tensor in self.train_encodinglayer_vecs[self.rand_index]]
-        encode_merge_correct = T.concatenate(merge_ls, axis = 1)
-        encode_merge_neg = T.concatenate(merge_ls_neg, axis = 1)
-
         gate_parameters = lasagne.layers.recurrent.Gate(W_in=lasagne.init.Orthogonal(), 
                                                         W_hid=lasagne.init.Orthogonal(),
                                                         W_cell=None,
@@ -209,8 +202,16 @@ class Hierachi_RNN(object):
         l_out_left = lasagne.layers.SliceLayer(l_gru_back, -1, 1)
         l_sum = lasagne.layers.ElemwiseSumLayer([l_out_right, l_out_left])
 
-        reasoner_result1 = lasagne.layers.get_output(l_sum, {l_in: encode_merge}, deterministic = True)
-        reasoner_result2 = lasagne.layers.get_output(l_sum, {l_in: encode_merge_neg}, deterministic = True)
+        plot_ls = [tensor.dimshuffle(0,'x',1) for tensor in self.train_encodinglayer_vecs[:4]]
+        merge_ls1 = plot_ls + [self.train_encodinglayer_vecs[4].dimshuffle(0,'x',1)]
+        merge_ls2 = plot_ls + [self.train_encodinglayer_vecs[5].dimshuffle(0,'x',1)]
+
+        encode_merge1 = T.concatenate(merge_ls1, axis = 1)
+        encode_merge2 = T.concatenate(merge_ls2, axis = 1)
+
+
+        reasoner_result1 = lasagne.layers.get_output(l_sum, {l_in: encode_merge1}, deterministic = True)
+        reasoner_result2 = lasagne.layers.get_output(l_sum, {l_in: encode_merge2}, deterministic = True)
         reasoner_params = lasagne.layers.get_all_params(l_sum)
 
         '''
@@ -227,47 +228,35 @@ class Hierachi_RNN(object):
         -----------------
         '''
 
-        self.DNN = DNN.DNN(INPUTS_SIZE = self.rnn_units, LAYER_UNITS = self.DNN_settings, INPUTS_PARTS = 2)
+        self.DNN = DNN.DNN(INPUTS_SIZE = self.rnn_units, LAYER_UNITS = self.DNN_settings, INPUTS_PARTS = 1)
 
-        score1 = lasagne.get_output(self.DNN.output, {self.DNN.l_in: reasoner_result1})
-        score2 = lasagne.get_output(self.DNN.output, {self.DNN.l_in: reasoner_result2})
+        score1 = T.flatten(lasagne.layers.get_output(self.DNN.output, {self.DNN.l_in: reasoner_result1}))
+        score2 = T.flatten(lasagne.layers.get_output(self.DNN.output, {self.DNN.l_in: reasoner_result2}))
 
         final_score = - score1 + self.delta + score2
+        panelties = [lasagne.regularization.l2(param) for param in self.DNN.all_params]
 
-        self.cost = lasagne.objectives.aggregate(final_score, mode='mean') 
+        panelty_cost = lasagne.objectives.aggregate(T.stack(panelties),mode='sum')
+        score_cost = lasagne.objectives.aggregate(final_score, mode = 'sum')
+        self.cost = score_cost + panelty_cost 
 
 
         # Retrieve all parameters from the network
         all_params = self.encoder.all_params + reasoner_params + self.DNN.all_params
+        
 
-        all_updates = lasagne.updates.rmsprop(self.cost, all_params)
-        # all_updates = lasagne.updates.adam(self.cost, all_params, learning_rate = self.learning_rate)
+
+        # all_updates = lasagne.updates.rmsprop(self.cost, all_params)
+        all_updates = lasagne.updates.adam(self.cost, all_params, learning_rate = self.learning_rate)
         # all_updates = lasagne.updates.momentum(self.cost, all_params, learning_rate = 0.05, momentum=0.9)
 
 
-        self.train_func = theano.function([self.rand_index] + self.inputs_variables + self.inputs_masks, 
-                                         [self.cost, score1, score2], updates = all_updates)
+        self.train_func = theano.function(self.inputs_variables + self.inputs_masks, 
+                                         [self.cost, score_cost, score1, score2], updates = all_updates)
 
-        # test ending2
-        end2 = T.matrix(name = "test_end2", dtype = 'int64')
-        mask_end2 = T.matrix(name = "test_mask2", dtype = theano.config.floatX)
-        end2_reshape = end2.dimshuffle(0,1,'x')
-
-        encoded_end2_seq = lasagne.layers.get_output(self.encoder.output, {self.encoder.l_in: end2_reshape, 
-                                                                       self.encoder.l_mask:mask_end2},
-                                                                       deterministic = True)
-        encoded_end2 = None
-        if self.mode == 'sequence':
-            encoded_end2 = (encoded_end2_seq * mask_end2.dimshuffle(0,1,'x')).sum(axis = 1) / mask_end2.sum(axis = 1, keepdims = True)         
-        else:
-            encoded_end2 = encoded_end2_seq
-
-        merge_ls2  = [T.reshape(tensor, (tensor.shape[0], 1, tensor.shape[1])) for tensor in self.train_encodinglayer_vecs[:-1]] + [T.reshape(encoded_end2, (encoded_end2.shape[0], 1, encoded_end2.shape[1]))]
-        reasoner_result3 = lasagne.layers.get_output(l_sum, {l_in: merge_ls2}, deterministic = True)
-        self.score2 = lasagne.get_output(self.DNN.output,{self.DNN.l_in: reasoner_result3})
-
-        self.prediction = theano.function(self.inputs_variables + self.inputs_masks + [end2, mask_end2],
-                                         [score1, self.score2])
+        # test ending
+        self.prediction = theano.function(self.inputs_variables + self.inputs_masks,
+                                         [score1, score2])
         # pydotprint(self.train_func, './computational_graph.png')
 
     def load_data(self):
@@ -332,12 +321,21 @@ class Hierachi_RNN(object):
             ending2_matrix = utils.padding(ending2_ls)
             ending2_mask = utils.mask_generator(ending2_ls)
 
-            score1, score2 = self.prediction(story_matrix[0], story_matrix[1], story_matrix[2], story_matrix[3], 
-                                    ending1_matrix, story_mask[0], story_mask[1], story_mask[2],
-                                    story_mask[3], ending1_mask, ending2_matrix, ending2_mask)
+            score1, score2 = self.prediction(story_matrix[0],
+                                             story_matrix[1],
+                                             story_matrix[2],
+                                             story_matrix[3], 
+                                             ending1_matrix,
+                                             ending2_matrix,
+                                             story_mask[0], 
+                                             story_mask[1],
+                                             story_mask[2],
+                                             story_mask[3],
+                                             ending1_mask,
+                                             ending2_mask)
 
             # Answer denotes the index of the anwer
-            prediction = np.argmax(np.concatenate((score1, score2), axis=1), axis=1)
+            prediction = np.argmax(np.concatenate((score1.reshape((-1,1)), score2.reshape((-1,1))), axis=1), axis=1)
             correct_vec = prediction - self.val_answer[i*minibatch_n:(i+1)*minibatch_n]
             correct += minibatch_n - (abs(correct_vec)).sum()
 
@@ -351,11 +349,20 @@ class Hierachi_RNN(object):
             ending2 = np.asarray(self.val_ending2[k], dtype='int64').reshape((1,-1))
             ending2_mask = np.ones((1, len(self.val_ending2[k])))
 
-            score1, score2 = self.prediction(story[0], story[1], story[2], story[3], 
-                                    ending1, story_mask[0], story_mask[1], story_mask[2],
-                                    story_mask[3], ending1_mask, ending2, ending2_mask)
+            score1, score2 = self.prediction(story[0],
+                                             story[1],
+                                             story[2],
+                                             story[3], 
+                                             ending1,
+                                             ending2,
+                                             story_mask[0], 
+                                             story_mask[1],
+                                             story_mask[2],
+                                             story_mask[3],
+                                             ending1_mask,
+                                             ending2_mask)
             # Answer denotes the index of the anwer
-            prediction = np.argmax(np.concatenate((score1, score2), axis=1))
+            prediction = np.argmax(np.concatenate((score1.reshape((-1,1)), score2.reshape((-1,1))), axis=1), axis = 1)
 
             if prediction == self.val_answer[k]:
                 correct += 1.    
@@ -381,12 +388,20 @@ class Hierachi_RNN(object):
             ending2_matrix = utils.padding(ending2_ls)
             ending2_mask = utils.mask_generator(ending2_ls)
 
-            score1, score2 = self.prediction(story_matrix[0], story_matrix[1], story_matrix[2], story_matrix[3], 
-                                    ending1_matrix, story_mask[0], story_mask[1], story_mask[2],
-                                    story_mask[3], ending1_mask, ending2_matrix, ending2_mask)
-
+            score1, score2 = self.prediction(story_matrix[0],
+                                             story_matrix[1],
+                                             story_matrix[2],
+                                             story_matrix[3], 
+                                             ending1_matrix,
+                                             ending2_matrix,
+                                             story_mask[0], 
+                                             story_mask[1],
+                                             story_mask[2],
+                                             story_mask[3],
+                                             ending1_mask,
+                                             ending2_mask)
             # Answer denotes the index of the anwer
-            prediction = np.argmax(np.concatenate((score1, score2), axis=1), axis=1)
+            prediction = np.argmax(np.concatenate((score1.reshape((-1,1)), score2.reshape((-1,1))), axis=1), axis=1)
             correct_vec = prediction - self.test_answer[i*minibatch_n:(i+1)*minibatch_n]
             correct += minibatch_n - (abs(correct_vec)).sum()
 
@@ -400,11 +415,20 @@ class Hierachi_RNN(object):
             ending2 = np.asarray(self.test_ending2[k], dtype='int64').reshape((1,-1))
             ending2_mask = np.ones((1, len(self.test_ending2[k])))
 
-            score1, score2 = self.prediction(story[0], story[1], story[2], story[3], 
-                                    ending1, story_mask[0], story_mask[1], story_mask[2],
-                                    story_mask[3], ending1_mask, ending2, ending2_mask)
+            score1, score2 = self.prediction(story[0],
+                                             story[1],
+                                             story[2],
+                                             story[3], 
+                                             ending1,
+                                             ending2,
+                                             story_mask[0], 
+                                             story_mask[1],
+                                             story_mask[2],
+                                             story_mask[3],
+                                             ending1_mask,
+                                             ending2_mask)
             # Answer denotes the index of the anwer
-            prediction = np.argmax(np.concatenate((score1, score2), axis=1))
+            prediction = np.argmax(np.concatenate((score1.reshape((-1,1)), score2.reshape((-1,1))), axis=1))
 
             if prediction == self.test_answer[k]:
                 correct += 1.            
@@ -469,6 +493,7 @@ class Hierachi_RNN(object):
 
             total_cost = 0.0
             total_correct_count = 0.0
+            total_panelty = 0.0
 
             max_score_index = None
             for batch in range(max_batch):
@@ -476,31 +501,37 @@ class Hierachi_RNN(object):
                 batch_index_list = [shuffled_index_list[i] for i in range(batch * N_BATCH, (batch+1) * N_BATCH)]
                 train_story = [[self.train_story[index][i] for index in batch_index_list] for i in range(1, self.story_nsent+1)]
                 train_ending = [self.train_ending[index] for index in batch_index_list]
+                batch_index_neg_list = np.random.randint(N_TRAIN_INS, size=(N_BATCH,))
+                while np.any(np.asarray(batch_index_list) - batch_index_neg_list == 0):
+                    batch_index_neg_list = np.random.randint(N_TRAIN_INS, size = (N_BATCH,))
+
+                train_ending2 = [self.train_ending[index] for index in batch_index_neg_list]
 
                 train_story_matrices = [utils.padding(batch_sent) for batch_sent in train_story]
                 train_end_matrix = utils.padding(train_ending)
+                train_end2_matrix = utils.padding(train_ending2)
                 # train_end2_matrix = utils.padding(end2)
 
                 train_story_mask = [utils.mask_generator(batch_sent) for batch_sent in train_story]
                 train_end_mask = utils.mask_generator(train_ending)
+                train_end2_mask = utils.mask_generator(train_ending2)
                 # train_end2_mask = utils.mask_generator(end2)
 
-                rand_index = utils.shuffle_index(N_BATCH)
-                while np.any(rand_index - np.arange(N_BATCH)==0):
-                    rand_index=utils.shuffle_index(N_BATCH)
-                cost, score1, score2= self.train_func(rand_index, 
-                                                      train_story_matrices[0], 
+                cost, panelty, score1, score2= self.train_func(train_story_matrices[0], 
                                                       train_story_matrices[1], 
                                                       train_story_matrices[2],
                                                       train_story_matrices[3], 
-                                                      train_end_matrix,   
+                                                      train_end_matrix, 
+                                                      train_end2_matrix,
                                                       train_story_mask[0],
                                                       train_story_mask[1], 
                                                       train_story_mask[2],
                                                       train_story_mask[3], 
-                                                      train_end_mask)
+                                                      train_end_mask,
+                                                      train_end2_mask)
 
                 total_correct_count += np.count_nonzero((score1 - score2).clip(0.0))
+                total_panelty += panelty
 
                 total_cost += cost
                 if batch % test_threshold ==0 and batch != 0:
@@ -518,8 +549,6 @@ class Hierachi_RNN(object):
                         print "test set accuracy: ", test_accuracy*100, "%"
                         if test_accuracy > best_test_accuracy:
                             best_test_accuracy = test_accuracy
-                    print "cosine score matrix over this minibatch:", all_other_score_matrix
-                    print "max other score index", max_score_index
               #      print "example negative ending:"
               #      '''===================================================='''
               #      '''randomly print out a story and it's higest score ending
@@ -542,7 +571,8 @@ class Hierachi_RNN(object):
 
             print "======================================="
             print "epoch summary:"
-            print "average cost in this epoch: ", total_cost/max_batch
+            print "average score cost in this epoch: ", total_cost/(max_batch * N_BATCH)
+            print "average panelty cost in this epoch: ", total_panelty/(max_batch * N_BATCH)
             print "average speed: ", N_TRAIN_INS/(time.time() - start_time), "instances/s "
             print "accuracy for this epoch: "+str(total_correct_count/(max_batch * N_BATCH) * 100.0)+"%"
  

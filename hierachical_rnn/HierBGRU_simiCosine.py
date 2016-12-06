@@ -120,8 +120,8 @@ class Hierachi_RNN(object):
         batch_rep1_broad = batch_rep1 + T.zeros((self.batch_m, self.batch_m, self.rnn_units))
         
         batch_rep2_broad = batch_rep2 + T.zeros((self.batch_m, self.batch_m, self.rnn_units))
-        batch_rep1_reshape = batch_rep1_broad.reshape((-1, self.rnn_units))
-        batch_rep2_reshape = batch_rep2_broad.dimshuffle(1,0,2).reshape((-1, self.rnn_units))
+        batch_rep1_reshape = batch_rep1_broad.dimshuffle(1,0,2).reshape((-1, self.rnn_units))
+        batch_rep2_reshape = batch_rep2_broad.reshape((-1, self.rnn_units))
 
         batch_dot = (T.batched_dot(batch_rep1_reshape, batch_rep2_reshape)).reshape((self.batch_m, self.batch_m))
         norm1 = T.sqrt(T.sum(T.sqr(batch_rep1), axis = 1))
@@ -216,8 +216,7 @@ class Hierachi_RNN(object):
         max_simi_index = T.argmax(all_other_simiscore_matrix, axis = 1)
 
         score2 = self.batch_cosine(reasoner_result, self.train_encodinglayer_vecs[4][max_simi_index]) 
-        score1 = T.flatten(T.nlinalg.diag(simiscore_matrix))
-
+        score1 = self.batch_cosine(reasoner_result, self.train_encodinglayer_vecs[4])
         final_score = - score1 + self.delta + score2
 
         score_vec = T.clip(final_score, 0.0, float('inf'))
@@ -246,9 +245,11 @@ class Hierachi_RNN(object):
                                             {self.encoder.l_in:end2_reshape,
                                              self.encoder.l_mask:end2_mask},
                                              deterministic = True)
-
-        end2_rep = (end2_seq * (end2_mask.dimshuffle(0,1,'x'))).sum(axis = 1) / (end2_mask.sum(axis = 1, keepdims = True))
-
+        end2_rep = None
+        if self.mode == "sequence":
+            end2_rep = (end2_seq * (end2_mask.dimshuffle(0,1,'x'))).sum(axis = 1) / (end2_mask.sum(axis = 1, keepdims = True))
+        else:
+            end2_rep = end2_seq
                
         t_score2 = self.batch_cosine(reasoner_result, end2_rep)
         t_score1 = self.batch_cosine(reasoner_result, self.train_encodinglayer_vecs[-1])

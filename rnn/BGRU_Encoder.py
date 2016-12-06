@@ -4,15 +4,15 @@ import lasagne
 import numpy as np
 
 class BGRUEncoder(object):
-    def __init__(self, LAYER_1_UNITS, dropout_rate = 0.0, wemb_trainable = 1):
+    def __init__(self, LAYER_1_UNITS, wemb_trainable = 1, mode = 'sequence'):
         self.layer1_units = LAYER_1_UNITS
         self.wemb = None
-        self.GRAD_CLIP = 100.
-        self.dropout_rate = dropout_rate
+        self.GRAD_CLIP = 10.
         self.l_in = None
         self.l_mask = None
         self.output = None
         self.wemb_trainable = wemb_trainable
+        self.mode = mode
 
     def build_model(self, WordEmbedding_Init = None):
 
@@ -34,7 +34,7 @@ class BGRUEncoder(object):
         if not self.wemb_trainable:
             l_emb.params[l_emb.W].remove('trainable')
 
-        l_drop = lasagne.layers.DropoutLayer(l_emb, p = self.dropout_rate)
+        #l_drop = lasagne.layers.DropoutLayer(l_emb, p = self.dropout_rate)
         #setting gates and cell parameters with specific nonlinearity functions
         # gate_parameters = lasagne.layers.recurrent.Gate(W_in=lasagne.init.Orthogonal(), 
         #                                                 W_hid=lasagne.init.Orthogonal(),
@@ -64,15 +64,15 @@ class BGRUEncoder(object):
         gate_parameters = lasagne.layers.recurrent.Gate(W_in=lasagne.init.Orthogonal(), 
                                                         W_hid=lasagne.init.Orthogonal(),
                                                         W_cell=None,
-                                                        b=lasagne.init.Constant(0.))
+                                                        b=lasagne.init.Constant(0.001))
         hidden_parameter = lasagne.layers.recurrent.Gate(W_in=lasagne.init.Orthogonal(), 
                                                         W_hid=lasagne.init.Orthogonal(),
                                                         W_cell=None,
-                                                        b=lasagne.init.Constant(0.),
+                                                        b=lasagne.init.Constant(0.001),
                                                         nonlinearity=lasagne.nonlinearities.tanh)
 
         # The LSTM layer should have the same mask input in order to avoid padding entries
-        l_grurnn = lasagne.layers.recurrent.GRULayer(l_drop, num_units=self.layer1_units, resetgate=gate_parameters,
+        l_grurnn = lasagne.layers.recurrent.GRULayer(l_emb, num_units=self.layer1_units, resetgate=gate_parameters,
                                                     updategate=gate_parameters, hidden_update=hidden_parameter,
                                                     backwards=False,
                                                     learn_init=True, 
@@ -80,7 +80,7 @@ class BGRUEncoder(object):
                                                     precompute_input=True, mask_input=self.l_mask
                                                     )
 
-        l_grurnn_back = lasagne.layers.recurrent.GRULayer(l_drop, num_units=self.layer1_units, resetgate=gate_parameters,
+        l_grurnn_back = lasagne.layers.recurrent.GRULayer(l_emb, num_units=self.layer1_units, resetgate=gate_parameters,
                                                     updategate=gate_parameters, hidden_update=hidden_parameter,
                                                     backwards=True,
                                                     learn_init=True, 
@@ -100,7 +100,15 @@ class BGRUEncoder(object):
         # l_pooling = lasagne.layers.GlobalPoolLayer(l_shuffle)
 
         l_out = l_merge
+
+        l_forward_last = lasagne.layers.SliceLayer(l_grurnn, -1, 1)
+        l_backward_last = lasagne.layers.SliceLayer(l_grurnn_back, -1, 1)
+        l_last_out = lasagne.layers.ElemwiseSumLayer([l_forward_last, l_backward_last])
+
         # l_out = lasagne.layers.SliceLayer(l_grurnn, -1, 1)
         #we only record the output(shall we record each layer???)
-        self.output = l_out
-        self.all_params = lasagne.layers.get_all_params(l_out)
+        if self.mode == "sequence":
+            self.output = l_out
+        else:
+            self.output = l_last_out
+        self.all_params = lasagne.layers.get_all_params(self.output)

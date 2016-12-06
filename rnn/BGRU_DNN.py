@@ -95,8 +95,8 @@ class Hierachi_RNN(object):
         batch_rep1_broad = batch_rep1 + T.zeros((self.batch_m, self.batch_m, self.rnn_units))
         
         batch_rep2_broad = batch_rep2 + T.zeros((self.batch_m, self.batch_m, self.rnn_units))
-        batch_rep1_reshape = batch_rep1_broad.reshape((-1, self.rnn_units))
-        batch_rep2_reshape = batch_rep2_broad.dimshuffle(1,0,2).reshape((-1, self.rnn_units))
+        batch_rep1_reshape = batch_rep1_broad.dimshuffle(1,0,2).reshape((-1, self.rnn_units))
+        batch_rep2_reshape = batch_rep2_broad.reshape((-1, self.rnn_units))
 
         all_input_pair = T.concatenate([batch_rep1_reshape, batch_rep2_reshape], axis = 1)
         all_flat_score = lasagne.layers.get_output(self.DNN.output, {self.DNN.l_in: all_input_pair})
@@ -138,7 +138,7 @@ class Hierachi_RNN(object):
             self.reshaped_inputs_variables.append(self.inputs_variables[i].dimshuffle(0,1,'x'))
 
         #initialize neural network units
-        self.encoder = BGRU_Encoder.BGRUEncoder(LAYER_1_UNITS = self.rnn_units, dropout_rate = 0.0, wemb_trainable = self.wemb_trainable)
+        self.encoder = BGRU_Encoder.BGRUEncoder(LAYER_1_UNITS = self.rnn_units, wemb_trainable = self.wemb_trainable, mode = 'sequence')
         self.encoder.build_model(self.wemb)
 
         #build encoding layer
