@@ -23,6 +23,7 @@ class Hierachi_RNN(object):
                  learning_rate = 0.001,
                  delta = 1.0,
                  mode = 'sequence',
+                 restraint_level = 0,
                  wemb_size = None):
         # Initialize Theano Symbolic variable attributes
         self.story_input_variable = None
@@ -92,6 +93,7 @@ class Hierachi_RNN(object):
         self.wemb_trainable = bool(int(wemb_trainable))
         self.learning_rate = float(learning_rate)
         self.mode = mode 
+        self.restraint_level = int(restraint_level)
 
     def encoding_layer(self):
 
@@ -234,11 +236,23 @@ class Hierachi_RNN(object):
         score2 = T.flatten(lasagne.layers.get_output(self.DNN.output, {self.DNN.l_in: reasoner_result2}))
 
         final_score = - score1 + self.delta + score2
-        panelties = [lasagne.regularization.l2(param) for param in self.DNN.all_params]
+        dnn_penalties = [lasagne.regularization.l2(param) for param in self.DNN.all_params]
+        rnn1_penalties = [lasagne.regularization.l2(param) for param in self.encoder.all_params]
+        rnn2_penalties = [lasagne.regularization.l2(param) for param in reasoner_params]
+        rnn_penalties = rnn1_penalties + rnn2_penalties
 
-        panelty_cost = lasagne.objectives.aggregate(T.stack(panelties),mode='sum')
+        dnn_penalty_cost = lasagne.objectives.aggregate(T.stack(dnn_penalties), mode='mean')
+        rnn_penalty_cost = lasagne.objectives.aggregate(T.stack(rnn_penalties), mode='mean')
+        
         score_cost = lasagne.objectives.aggregate(final_score, mode = 'sum')
-        self.cost = score_cost + panelty_cost 
+        if self.restraint_level == 0:
+            self.cost = score_cost
+        elif self.restraint_level == 1:
+            self.cost = score_cost + dnn_penalty_cost
+        elif self.restraint_level == 2:
+            self.cost = score_cost + dnn_penalty_cost + lasagne.objectives.aggregate(T.stack(rnn1_penalties), mode = 'mean')
+        else:
+            self.cost = score_cost + dnn_penalty_cost + rnn_penalty_cost
 
 
         # Retrieve all parameters from the network
@@ -532,6 +546,7 @@ class Hierachi_RNN(object):
 
                 total_correct_count += np.count_nonzero((score1 - score2).clip(0.0))
                 total_panelty += panelty
+                
 
                 total_cost += cost
                 if batch % test_threshold ==0 and batch != 0:
