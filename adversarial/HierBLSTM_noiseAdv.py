@@ -111,6 +111,7 @@ class Hierachi_RNN(object):
         self.discrim_regularization_dict = {0:"no regularization on discriminator",
                                             1:"L2 on discriminator DNN",
                                             2:"L2 on discriminator word level RNN + DNN",
+                                            3:"L2 on discriminator all RNN",
                                             4:"L2 on discriminator all level"}
         self.generat_regularization_dict = {0:"no regularization on generator",
                                             1:"L2 on generator DNN"}
@@ -192,6 +193,10 @@ class Hierachi_RNN(object):
             self.all_discrim_cost = self.discrim_cost + \
                                     self.regularization_index * self.penalty_generator(self.DNN_score_func.all_params) + \
                                     self.regularization_index * self.penalty_generator(sefl.encoder.all_params)
+        elif self.discrim_regularization_level == 3:
+            self.all_discrim_cost = self.discrim_cost + \
+                                    self.regularization_index * self.penalty_generator(self.encoder.all_params) + \
+                                    self.regularization_index * self.penalty_generator(self.reasoner.all_params)
         else:
             self.all_discrim_cost = self.discrim_cost + \
                                     self.regularization_index * self.penalty_generator(self.DNN_score_func.all_params) + \
