@@ -22,14 +22,17 @@ class Hierachi_RNN(object):
                  batchsize, 
                  dnn_generator_setting,
                  wemb_trainable = 1,
-                 learning_rate = 0.001,
+                 discrim_lr = 0.001,
+                 generat_lr = 0.001,
                  delta = 1.0,
                  mode = 'sequence',
                  nonlin_func = 'default',
                  score_func = 'cos',
                  loss_type = 'hinge',
                  dnn_discriminator_setting = '512x1',
-                 regulizarization = None):
+                 discrim_regularization_level = 0,
+                 generat_regularization_level = 0,
+                 regularization_index = '1E-4'):
         # Initialize Theano Symbolic variable attributes
         self.story_input_variable = None
         self.story_mask = None
@@ -87,7 +90,9 @@ class Hierachi_RNN(object):
         self.delta = float(delta)
        
         self.wemb_trainable = bool(int(wemb_trainable))
-        self.learning_rate = float(learning_rate)
+        self.discrim_lr = float(discrim_lr)
+        self.generat_lr = float(generat_lr)
+
         self.mode = mode
         self.GRAD_CLIP = 10.0
         if nonlin_func == 'default':
@@ -97,10 +102,19 @@ class Hierachi_RNN(object):
 
         self.bias = 0.001
         self.dnn_generator_settings = map(int, dnn_generator_setting.split('x'))
-        self.dnn_discriminator_settings = map(int, dnn_discriminator_setting.split('x'))
+        self.dnn_discriminator_setting = map(int, dnn_discriminator_setting.split('x'))
         self.loss_type = loss_type
         self.score_func = score_func
-        self.regulizarization = regulizarization
+        self.discrim_regularization_level = int(discrim_regularization_level)
+        self.generat_regularization_level = int(generat_regularization_level)
+
+        self.discrim_regularization_dict = {0:"no regularization on discriminator",
+                                            1:"L2 on discriminator DNN",
+                                            2:"L2 on discriminator word level RNN + DNN",
+                                            4:"L2 on discriminator all level"}
+        self.generat_regularization_dict = {0:"no regularization on generator",
+                                            1:"L2 on generator DNN"}
+        self.regularization_index = float(regularization_index)
 
         if self.loss_type == 'log':
             assert self.dnn_discriminator_setting[-1] == 2
@@ -114,6 +128,13 @@ class Hierachi_RNN(object):
                 assert self.sent_rnn_units[-1] > 2
             else:
                 assert self.sent_rnn_units[-1] == 1
+        
+        if self.score_func != "DNN":
+            assert self.discrim_regularization_level == 0
+
+    def regularization_show(self):
+        print self.discrim_regularization_dict[self.discrim_regularization_level]
+        print self.generat_regularization_dict[self.generat_regularization_level]
 
     def encoding_layer(self):
         if self.mode == 'sequence':
@@ -157,6 +178,31 @@ class Hierachi_RNN(object):
         norm_matrix = T.dot(norm1.reshape((-1,1)),norm2.reshape((1,-1)))
         return batch_dot/norm_matrix
 
+    def penalty_generator(self, params):
+        penalty = [lasagne.regularization.l2(param) for param in params]
+        penalty_scalar = lasagne.objectives.aggregate(T.stack(penalty), mode = "mean")
+        return penalty_scalar
+
+    def discrim_cost_generator(self):
+        if self.discrim_regularization_level == 0:
+            self.all_discrim_cost = self.discrim_cost
+        elif self.discrim_regularization_level == 1:
+            self.all_discrim_cost = self.discrim_cost + self.regularization_index * self.penalty_generator(self.DNN_score_func.all_params)
+        elif self.discrim_regularization_level == 2:
+            self.all_discrim_cost = self.discrim_cost + \
+                                    self.regularization_index * self.penalty_generator(self.DNN_score_func.all_params) + \
+                                    self.regularization_index * self.penalty_generator(sefl.encoder.all_params)
+        else:
+            self.all_discrim_cost = self.discrim_cost + \
+                                    self.regularization_index * self.penalty_generator(self.DNN_score_func.all_params) + \
+                                    self.regularization_index * self.penalty_generator(self.encoder.all_params) + \
+                                    self.regularization_index * self.penalty_generator(self.reasoner.all_params)
+    def generat_cost_generator(self):
+        if self.generat_regularization_level == 0:
+            self.all_generat_cost = self.generat_cost
+        else:
+            self.all_generat_cost = self.generat_cost + self.regularization_index * self.penalty_generator(self.DNN_generator.all_params)
+
     def model_constructor(self, wemb_size = None):
         self.inputs_variables = []
         self.inputs_masks = []
@@ -180,22 +226,20 @@ class Hierachi_RNN(object):
         self.encoding_layer()
         
         self.reasoner = BLSTM_Encoder.BlstmEncoder(self.sent_rnn_units,
-                                                       mode = 'last')
+                                                   mode = 'last')
 
         '''================PART II================'''
         '''             DNN GENERATION            '''
         '''======================================='''
 
         
-        self.batch_m, rep_n = self.train_encodinglayer_vecs[0].shape
 
-        self.DNN_generator = DNN.DNN(INPUTS_SIZE = self.sent_rnn_units, 
-                                     LAYER_UNITS = self.dnn_generator_settings, 
-                                     INPUTS_PARTS = 1, 
+        self.DNN_generator = DNN.DNN(INPUTS_SIZE = self.dnn_generator_settings[0], 
+                                     LAYER_UNITS = self.dnn_generator_settings[1:], 
                                      final_nonlin = self.nonlin_func)
 
         srng = RandomStreams(seed = 31415)
-        random_input = srng.normal((self.batch_m, rep_n))
+        random_input = srng.normal((self.batchsize, self.dnn_generator_settings[0]))
         fake_endings = lasagne.layers.get_output(self.DNN_generator.output, {self.DNN_generator.l_in: random_input})
 
 
@@ -221,9 +265,8 @@ class Hierachi_RNN(object):
         #build reasoning layers
             self.reasoner.build_sent_level(self.word_rnn_units[0])
 
-            self.DNN_score_func = DNN.DNN(INPUTS_SIZE = self.rnn_units, 
-                                          LAYER_UNITS = self.dnn_discriminator_settings, 
-                                          INPUTS_PARTS = 2, 
+            self.DNN_score_func = DNN.DNN(INPUTS_SIZE = self.sent_rnn_units[-1] + self.dnn_generator_settings[-1], 
+                                          LAYER_UNITS = self.dnn_discriminator_setting, 
                                           final_nonlin = self.nonlin_func)
 
             self.merge_ls = [tensor.dimshuffle(0,'x',1) for tensor in self.train_encodinglayer_vecs[:4]]
@@ -276,32 +319,27 @@ class Hierachi_RNN(object):
             prob1 = lasagne.nonlinearities.softmax(self.score1)
             prob2 = lasagne.nonlinearities.softmax(self.score2)
 
-            cost1 = lasagne.objectives.categorical_crossentropy(prob1, T.ones((self.current_Nbatch, )).astype('int64'))
-            cost2 = lasagne.objectives.categorical_crossentropy(prob2, T.zeros((self.current_Nbatch, )).astype('int64'))
-            liar_cost = lasagne.objectives.categorical_crossentropy(prob2, T.ones((self.current_Nbatch, )).astype('int64'))
+            cost1 = lasagne.objectives.categorical_crossentropy(prob1, T.ones((self.batchsize, )).astype('int64'))
+            cost2 = lasagne.objectives.categorical_crossentropy(prob2, T.zeros((self.batchsize, )).astype('int64'))
+            liar_cost = lasagne.objectives.categorical_crossentropy(prob2, T.ones((self.batchsize, )).astype('int64'))
 
             self.discrim_cost = lasagne.objectives.aggregate(cost1 + cost2, mode = 'mean')
             self.generat_cost = lasagne.objectives.aggregate(liar_cost, mode = 'mean')
+           
 
-            self.all_discrim_params = self.encoder.all_params + self.reasoner.all_params + self.DNN_score_func.all_params
+            self.all_discrim_params = self.encoder.all_params + self.reasoner.all_params
+            if self.score_func == "DNN":
+                self.all_discrim_params += self.DNN_score_func.all_params
 
         # Retrieve all parameters from the network
 
         self.all_generat_params = self.DNN_generator.all_params
 
-        self.penalty_cost = None 
-        if self.regulizarization != None:
-            penalties = [lasagne.regularization.l2(param) for param in self.DNN_score_func.all_params]
+        self.discrim_cost_generator()
+        self.generat_cost_generator()
 
-            self.penalty_cost = lasagne.objectives.aggregate(T.stack(penalties), mode='mean')
-        
-            self.all_discrim_cost = self.discrim_cost + self.penalty_cost
-
-        else:
-            self.all_discrim_cost = self.discrim_cost
-    
-        all_discrim_updates = lasagne.updates.adam(self.all_discrim_cost, self.all_discrim_params, learning_rate = self.learning_rate)
-        all_generat_updates = lasagne.updates.adam(self.generat_cost, self.all_generat_params, learning_rate = self.learning_rate)
+        all_discrim_updates = lasagne.updates.adam(self.all_discrim_cost, self.all_discrim_params, learning_rate = self.discrim_lr)
+        all_generat_updates = lasagne.updates.adam(self.all_generat_cost, self.all_generat_params, learning_rate = self.generat_lr)
         # all_updates = lasagne.updates.momentum(self.cost, all_params, learning_rate = 0.05, momentum=0.9)
         all_discrim_updates.update(all_generat_updates)
         
@@ -412,8 +450,8 @@ class Hierachi_RNN(object):
             else:
                 answer1 = np.argmax(score1, axis = 1)
                 answer2 = np.argmax(score2, axis = 1)
-                correct_vec1 += (1 - answer1) - eva_answer[i*minibatch_n: (i+1)*minibatch_n]
-                correct_vec2 += answer2 - eva_answer[i*minibatch_n: (i+1)*minibatch_n]
+                correct_vec1 = (1 - answer1) - eva_answer[i*minibatch_n: (i+1)*minibatch_n]
+                correct_vec2 = answer2 - eva_answer[i*minibatch_n: (i+1)*minibatch_n]
                 correct += minibatch_n*2 - (abs(correct_vec1)).sum() - (abs(correct_vec2)).sum()
 
 
@@ -451,8 +489,8 @@ class Hierachi_RNN(object):
         else:
             answer1 = np.argmax(score1, axis = 1)
             answer2 = np.argmax(score2, axis = 1)
-            correct_vec1 += (1 - answer1) - eva_answer[-residue:]
-            correct_vec2 += answer2 - eva_answer[-residue:]
+            correct_vec1 = (1 - answer1) - eva_answer[-residue:]
+            correct_vec2 = answer2 - eva_answer[-residue:]
             correct += minibatch_n*2 - (abs(correct_vec1)).sum() - (abs(correct_vec2)).sum()
             return correct/(2*n_eva)
 
@@ -550,15 +588,20 @@ class Hierachi_RNN(object):
                 if self.loss_type == "hinge":
                     total_correct_count += np.count_nonzero((score1.flatten() - score2.flatten()).clip(0.0))
                 else:
-                    correct1 = (1 - np.argmax(score1)).sum()
-                    correct2 = np.argmax(score2).sum()
+                    correct1 = np.argmax(score1, axis = 1).sum()
+                    correct2 = (1-np.argmax(score2, axis = 1)).sum()
                     total_correct_count += (correct1 + correct2)
 
                 total_disc_cost += discrim_cost
                 total_gene_cost += generat_cost
 
                 if batch % test_threshold == 0 and batch != 0:
-                    print "accuracy on training set: ", total_correct_count/((batch+1) * N_BATCH)*100.0, "%"
+                    train_acc = 0.0
+                    if self.loss_type == "hinge":
+                        train_acc = total_correct_count / ((batch+1) * N_BATCH)*100.0
+                    else:
+                        train_acc = total_correct_count / ((batch+1) * N_BATCH * 2)*100.0
+                    print "accuracy on training set: ", train_acc, "%"
                     print "example score sequence"
                     print np.stack((score1, score2), axis = 1)
                     print "test on val set..."
@@ -607,7 +650,9 @@ class Hierachi_RNN(object):
    
 if __name__ == '__main__':
     model = Hierachi_RNN(*sys.argv[1:])
-
+    
+    print "your choice of regularization is:"
+    model.regularization_show()
     print "loading data"
     model.load_data()
 

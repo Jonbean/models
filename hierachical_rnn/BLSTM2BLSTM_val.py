@@ -16,7 +16,6 @@ import sys
 class Hierachi_RNN(object):
     def __init__(self, 
                  rnn_setting, 
-                 dropout_rate, 
                  batchsize, 
                  val_split_ratio, 
                  score_func_nonlin = 'default',
@@ -40,7 +39,6 @@ class Hierachi_RNN(object):
 
         self.rnn_units = int(rnn_setting)
         # self.mlp_units = [int(elem) for elem in mlp_setting.split('x')]
-        self.dropout_rate = float(dropout_rate)
         self.batchsize = int(batchsize)
 
         self.val_split_ratio = float(val_split_ratio)
@@ -107,7 +105,7 @@ class Hierachi_RNN(object):
 
         #build reasoning layers
 
-        self.merge_ls = [T.reshape(tensor, (tensor.shape[0], 1, tensor.shape[1])) for tensor in self.train_encodinglayer_vecs[:-2]]
+        self.merge_ls = [T.reshape(tensor, (tensor.shape[0], 1, tensor.shape[1])) for tensor in self.train_encodinglayer_vecs[:4]]
 
         encode_merge = T.concatenate(self.merge_ls, axis = 1)
 
@@ -152,8 +150,8 @@ class Hierachi_RNN(object):
 
         l_in = lasagne.layers.InputLayer(shape=(None, self.rnn_units * 2))
         
-        l_hid1 = lasagne.layers.DenseLayer(l_in, num_units = 1024, nonlinearity=lasagne.nonlinearities.tanh)
-        l_hid = lasagne.layers.DenseLayer(l_hid1, num_units=1, nonlinearity=self.score_func_nonlin)
+        l_hid1 = lasagne.layers.DenseLayer(l_in, num_units = 512, nonlinearity=lasagne.nonlinearities.tanh)
+        l_hid = lasagne.layers.DenseLayer(l_hid1, num_units = 1, nonlinearity=self.score_func_nonlin)
 
         final_class_param = lasagne.layers.get_all_params(l_hid)
 
@@ -168,9 +166,13 @@ class Hierachi_RNN(object):
         target1 = T.vector('gold_target1', dtype= theano.config.floatX)
         target2 = T.vector('gold_target2', dtype= theano.config.floatX)
 
-        cost = target1 * score1 + target2 * score2
+        cost = target1 * score1 + target2 * score2 + 1.0
+        
+        dnn_penalty = [lasagne.regularization.l2(param) for param in final_class_param]
 
-        self.cost = lasagne.objectives.aggregate(cost, mode='mean')
+        dnn_penalty_mean = lasagne.objectives.aggregate(T.stack(dnn_penalty), mode = 'mean')
+
+        self.cost = lasagne.objectives.aggregate(cost + 0.0001*dnn_penalty_mean, mode='mean')
 
         # Retrieve all parameters from the network
         all_params = self.encoder.all_params + reasoner_params + final_class_param
@@ -364,10 +366,20 @@ class Hierachi_RNN(object):
                 train_end2_mask = utils.mask_generator(end2)
                 
 
-                cost, prediction1, prediction2 = self.train_func(train_story_matrices[0], train_story_matrices[1], train_story_matrices[2],
-                                                               train_story_matrices[3], train_end1_matrix, train_end2_matrix,
-                                                               train_story_mask[0], train_story_mask[1], train_story_mask[2],
-                                                               train_story_mask[3], train_end1_mask, train_end2_mask, target1, target2)
+                cost, prediction1, prediction2 = self.train_func(train_story_matrices[0],
+                                                                 train_story_matrices[1],
+                                                                 train_story_matrices[2],
+                                                                 train_story_matrices[3],
+                                                                 train_end1_matrix,
+                                                                 train_end2_matrix,
+                                                                 train_story_mask[0],
+                                                                 train_story_mask[1],
+                                                                 train_story_mask[2],
+                                                                 train_story_mask[3],
+                                                                 train_end1_mask,
+                                                                 train_end2_mask,
+                                                                 target1,
+                                                                 target2)
 
 
 
@@ -396,8 +408,10 @@ class Hierachi_RNN(object):
             print "======================================="
 
 
-def main(argv):
-    model = Hierachi_RNN(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5])
+   
+if __name__ == '__main__':
+
+    model = Hierachi_RNN(*sys.argv[1:])
 
     print "loading data"
     model.load_data()
@@ -408,8 +422,5 @@ def main(argv):
 
     print "training begin!"
     model.begin_train()
-    
-if __name__ == '__main__':
-    main(sys.argv[1:])
-
+ 
 

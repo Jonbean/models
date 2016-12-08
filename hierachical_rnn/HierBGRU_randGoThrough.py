@@ -23,7 +23,9 @@ class Hierachi_RNN(object):
                  learning_rate = 0.001,
                  delta = 1.0,
                  mode = 'sequence',
-                 restraint_level = 0,
+                 regularization_index = 0,
+                 dnn_regularization_factor = '5E-3',
+                 rnn_regularization_factor = '1E-3',
                  wemb_size = None):
         # Initialize Theano Symbolic variable attributes
         self.story_input_variable = None
@@ -93,8 +95,9 @@ class Hierachi_RNN(object):
         self.wemb_trainable = bool(int(wemb_trainable))
         self.learning_rate = float(learning_rate)
         self.mode = mode 
-        self.restraint_level = int(restraint_level)
-
+        self.regularization_index = int(regularization_index)
+        self.dnn_regularization_factor = float(dnn_regularization_factor)
+        self.rnn_regularization_factor = float(rnn_regularization_factor)
     def encoding_layer(self):
 
 
@@ -230,7 +233,7 @@ class Hierachi_RNN(object):
         -----------------
         '''
 
-        self.DNN = DNN.DNN(INPUTS_SIZE = self.rnn_units, LAYER_UNITS = self.DNN_settings, INPUTS_PARTS = 1)
+        self.DNN = DNN.DNN(INPUTS_SIZE = self.rnn_units, LAYER_UNITS = self.DNN_settings)
 
         score1 = T.flatten(lasagne.layers.get_output(self.DNN.output, {self.DNN.l_in: reasoner_result1}))
         score2 = T.flatten(lasagne.layers.get_output(self.DNN.output, {self.DNN.l_in: reasoner_result2}))
@@ -245,14 +248,14 @@ class Hierachi_RNN(object):
         rnn_penalty_cost = lasagne.objectives.aggregate(T.stack(rnn_penalties), mode='mean')
         
         score_cost = lasagne.objectives.aggregate(final_score, mode = 'sum')
-        if self.restraint_level == 0:
+        if self.regularization_index == 0:
             self.cost = score_cost
-        elif self.restraint_level == 1:
-            self.cost = score_cost + dnn_penalty_cost
-        elif self.restraint_level == 2:
-            self.cost = score_cost + dnn_penalty_cost + lasagne.objectives.aggregate(T.stack(rnn1_penalties), mode = 'mean')
+        elif self.regularization_index == 1:
+            self.cost = score_cost + self.dnn_regularization_factor * dnn_penalty_cost
+        elif self.regularization_index == 2:
+            self.cost = score_cost + self.dnn_regularization_factor * dnn_penalty_cost + self.rnn_regularization_factor * lasagne.objectives.aggregate(T.stack(rnn1_penalties), mode = 'mean')
         else:
-            self.cost = score_cost + dnn_penalty_cost + rnn_penalty_cost
+            self.cost = score_cost + self.dnn_regularization_factor * dnn_penalty_cost + self.rnn_regularization_factor * rnn_penalty_cost
 
 
         # Retrieve all parameters from the network
