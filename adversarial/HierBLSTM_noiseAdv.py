@@ -197,7 +197,6 @@ class Hierachi_RNN(object):
         elif self.discrim_regularization_level == 3:
             self.all_discrim_cost = self.discrim_cost + \
                                     self.regularization_index * self.penalty_generator(self.encoder.all_params) + \
-                                    self.regularization_index * self.penalty_generator(self.reasoner.all_params)                                    
         elif self.discrim_regularization_level == 4:
             self.all_discrim_cost = self.discrim_cost + \
                                     self.regularization_index * self.penalty_generator(self.encoder.all_params) + \
