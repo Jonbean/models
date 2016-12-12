@@ -79,6 +79,7 @@ class Hierachi_RNN(object):
         self.attentioned_sent_rep1 = []
         self.attentioned_sent_rep2 = []
         self.wemb_trainable = bool(int(wemb_trainable))
+        self.bilinear_attention_matrix = theano.shared(0.02*np.random.rand(self.rnn_units, self.rnn_units) - 0.01)
 
 
     def encoding_layer(self):
