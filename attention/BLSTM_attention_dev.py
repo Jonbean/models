@@ -39,8 +39,8 @@ class Hierachi_RNN(object):
 
         self.wemb_matrix_path = '../../data/pickles/index_wemb_matrix.pkl'
 
-        self.word_rnn_units = map(int, word_rnn_setting.split('x'))
-        self.sent_rnn_units = map(int, sent_rnn_setting.split('x'))
+        self.word_rnn_units = int(word_rnn_setting)
+        self.sent_rnn_units = int(sent_rnn_setting)
         # self.mlp_units = [int(elem) for elem in mlp_setting.split('x')]
         self.bilinear_matrix = theano.shared(0.002*np.random.rand(self.word_rnn_units, self.word_rnn_units)-0.001)
         self.batchsize = int(batchsize)
@@ -135,7 +135,7 @@ class Hierachi_RNN(object):
             self.reshaped_inputs_variables.append(self.inputs_variables[i].reshape([batch_size, seqlen, 1]))
 
         #initialize neural network units
-        self.encoder = BLSTM_Encoder.BlstmEncoder(LSTMLAYER_UNITS = self.word_rnn_units, 
+        self.encoder = BLSTM_Encoder.BlstmEncoder(LSTMLAYER_UNITS = [self.word_rnn_units], 
                                                   wemb_trainable = self.wemb_trainable, 
                                                   mode = 'sequence')
         self.encoder.build_word_level(self.wemb)
@@ -154,7 +154,7 @@ class Hierachi_RNN(object):
         encode_merge1 = T.concatenate(self.merge_ls1, axis = 1)
         encode_merge2 = T.concatenate(self.merge_ls2, axis = 1)
 
-        self.reasoner = BLSTM_Encoder.BlstmEncoder(LSTMLAYER_UNITS = self.sent_rnn_units, 
+        self.reasoner = BLSTM_Encoder.BlstmEncoder(LSTMLAYER_UNITS = [self.sent_rnn_units], 
                                                    wemb_trainable = False, 
                                                    mode = 'last')
 
