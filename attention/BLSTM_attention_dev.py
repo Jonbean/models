@@ -42,7 +42,7 @@ class Hierachi_RNN(object):
         self.word_rnn_units = int(word_rnn_setting)
         self.sent_rnn_units = int(sent_rnn_setting)
         # self.mlp_units = [int(elem) for elem in mlp_setting.split('x')]
-        self.bilinear_matrix = theano.shared(0.002*np.random.rand(self.rnn_units, self.rnn_units)-0.001)
+        self.bilinear_matrix = theano.shared(0.002*np.random.rand(self.word_rnn_units, self.word_rnn_units)-0.001)
         self.batchsize = int(batchsize)
 
         self.val_split_ratio = float(val_split_ratio)
@@ -85,27 +85,14 @@ class Hierachi_RNN(object):
 
 
         assert len(self.reshaped_inputs_variables)==len(self.inputs_masks)
-        for i in range(self.story_nsent):
+        for i in range(self.story_nsent+2):
             self.train_encodinglayer_vecs.append(lasagne.layers.get_output(self.encoder.output,
                                                         {self.encoder.l_in:self.reshaped_inputs_variables[i], 
                                                          self.encoder.l_mask:self.inputs_masks[i]},
                                                          deterministic = True))
-        ending1_sequence_tensor = lasagne.layers.get_output(self.encoder.output,
-                                                        {self.encoder.l_in:self.reshaped_inputs_variables[4],
-                                                        self.encoder.l_mask:self.inputs_masks[4]},
-                                                        deterministic = True)
-        ending2_sequence_tensor = lasagne.layers.get_output(self.encoder.output,
-                                                        {self.encoder.l_in:self.reshaped_inputs_variables[5],
-                                                        self.encoder.l_mask:self.inputs_masks[5]},
-                                                        deterministic = True)
 
-        l_end_in= lasagne.layers.InputLayer((None, None, self.rnn_units))
-        l_shuffle = lasagne.layers.DimshuffleLayer(l_end_in, (0,2,1))
-        l_pooling = lasagne.layers.GlobalPoolLayer(l_shuffle)
-
-
-        end1_representation = lasagne.layers.get_output(l_pooling, {l_end_in:ending1_sequence_tensor})
-        end2_representation = lasagne.layers.get_output(l_pooling, {l_end_in:ending2_sequence_tensor})
+        end1_representation = (self.train_encodinglayer_vecs[4] * self.inputs_masks[4].dimshuffle(0,1,'x')).sum(axis = 1) / self.inputs_masks[4].sum(axis = 1, keepdims = True)
+        end2_representation = (self.train_encodinglayer_vecs[5] * self.inputs_masks[5].dimshuffle(0,1,'x')).sum(axis = 1) / self.inputs_masks[5].sum(axis = 1, keepdims = True)
         self.train_encodinglayer_vecs.append(end1_representation)
         self.train_encodinglayer_vecs.append(end2_representation)
         
@@ -113,17 +100,18 @@ class Hierachi_RNN(object):
         for i in range(self.story_nsent):
             n_batch, n_seq, _ = self.train_encodinglayer_vecs[i].shape
 
-      
-            attention1_score_tensor = (self.train_encodinglayer_vecs[i]*self.train_encodinglayer_vecs[4].dimshuffle(0,'x',1)).sum(2)
-
-            attention2_score_tensor = (self.train_encodinglayer_vecs[i]*self.train_encodinglayer_vecs[5].dimshuffle(0,'x',1)).sum(2)
             #second attention
 
-            softmax_mask = T.switch(T.eq(self.inputs_masks[i], T.ones_like(self.inputs_masks[i])), self.inputs_masks[i], float('-inf'))
+            bili_part1 = T.dot(self.train_encodinglayer_vecs[i], self.bilinear_attention_matrix)
 
+            attention1_score_tensor = T.batched_dot(bili_part1, self.train_encodinglayer_vecs[6])
+            attention2_score_tensor = T.batched_dot(bili_part1, self.train_encodinglayer_vecs[7])
 
-            attention1_weight_matrix = T.nnet.softmax(attention1_score_tensor.reshape([n_batch, -1])*softmax_mask)
-            attention2_weight_matrix = T.nnet.softmax(attention2_score_tensor.reshape([n_batch, -1])*softmax_mask)
+            numerator1 = self.inputs_masks[i] * T.exp(attention1_score_tensor - attention1_score_tensor.max(axis = 1, keepdims = True))
+            numerator2 = self.inputs_masks[i] * T.exp(attention2_score_tensor - attention2_score_tensor.max(axis = 1, keepdims = True))
+
+            attention1_weight_matrix = numerator1 / numerator1.sum(axis = 1, keepdims = True)
+            attention2_weight_matrix = numerator2 / numerator2.sum(axis = 1, keepdims = True)
 
             attentioned_sent_seq1 = self.train_encodinglayer_vecs[i]*(attention1_weight_matrix.reshape([n_batch, n_seq, 1]))
             attentioned_sent_seq2 = self.train_encodinglayer_vecs[i]*(attention2_weight_matrix.reshape([n_batch, n_seq, 1]))
@@ -133,6 +121,7 @@ class Hierachi_RNN(object):
 
             self.attentioned_sent_rep1.append(attentioned_sent_rep1)
             self.attentioned_sent_rep2.append(attentioned_sent_rep2)
+
 
            
     def model_constructor(self, wemb_size = None):
@@ -174,7 +163,7 @@ class Hierachi_RNN(object):
         reasoner_result2 = lasagne.layers.get_output(self.reasoner.output, 
                                                     {self.reasoner.l_in: encode_merge2})
 
-        l_in = lasagne.layers.InputLayer(shape=(None, self.rnn_units * 2))
+        l_in = lasagne.layers.InputLayer(shape=(None, self.sent_rnn_units * 2))
         
         l_hid1 = lasagne.layers.DenseLayer(l_in, num_units = 512, nonlinearity=lasagne.nonlinearities.tanh)
         l_hid = lasagne.layers.DenseLayer(l_hid1, num_units = 1, nonlinearity=self.score_func_nonlin)
