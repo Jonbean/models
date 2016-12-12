@@ -18,7 +18,6 @@ class Hierachi_RNN(object):
     def __init__(self, 
                  word_rnn_setting,
                  sent_rnn_setting, 
-                 dropout_rate, 
                  batchsize, 
                  val_split_ratio, 
                  wemb_trainable = '0',
@@ -43,7 +42,6 @@ class Hierachi_RNN(object):
         self.sent_rnn_units = int(sent_rnn_setting)
         # self.mlp_units = [int(elem) for elem in mlp_setting.split('x')]
         self.bilinear_matrix = theano.shared(0.002*np.random.rand(self.rnn_units, self.rnn_units)-0.001)
-        self.dropout_rate = float(dropout_rate)
         self.batchsize = int(batchsize)
 
         self.val_split_ratio = float(val_split_ratio)
