@@ -6,7 +6,7 @@ import os
 import time
 import utils
 import cPickle as pickle
-import BLSTM_sequence
+import BLSTM_Encoder
 import sys
 # from theano.printing import pydotprint
 
@@ -37,7 +37,7 @@ class Hierachi_RNN(object):
 
         self.wemb_matrix_path = '../../data/pickles/index_wemb_matrix.pkl'
 
-        self.rnn_units = int(rnn_setting)
+        self.rnn_units = map(int, rnn_setting.split('x'))
         # self.mlp_units = [int(elem) for elem in mlp_setting.split('x')]
         self.batchsize = int(batchsize)
 
@@ -97,58 +97,25 @@ class Hierachi_RNN(object):
             self.reshaped_inputs_variables.append(self.inputs_variables[i].reshape([batch_size, seqlen, 1]))
 
         #initialize neural network units
-        self.encoder = BLSTM_sequence.BlstmEncoder(LSTMLAYER_1_UNITS = self.rnn_units, wemb_trainable = self.wemb_trainable)
-        self.encoder.build_model(self.wemb)
+        self.encoder = BLSTM_Encoder.BlstmEncoder(LSTMLAYER_UNITS = self.rnn_units, wemb_trainable = self.wemb_trainable)
+
+        self.encoder.build_word_level(self.wemb)
 
         #build encoding layer
         self.encoding_layer()
 
         #build reasoning layers
+        self.reasoner = BLSTM_Encoder.BlstmEncoder(LSTMLAYER_UNITS = self.rnn_units, mode = 'last')
+        self.reasoner.build_sent_level(self.rnn_units[0])
 
-        self.merge_ls = [T.reshape(tensor, (tensor.shape[0], 1, tensor.shape[1])) for tensor in self.train_encodinglayer_vecs[:4]]
+        self.merge_ls = [tensor.dimshuffle(0,'x',1) for tensor in self.train_encodinglayer_vecs[:4]]
 
         encode_merge = T.concatenate(self.merge_ls, axis = 1)
 
-        l_in = lasagne.layers.InputLayer(shape=(None, None, self.rnn_units))
-        gate_parameters = lasagne.layers.recurrent.Gate(W_in=lasagne.init.Orthogonal(), 
-                                                        W_hid=lasagne.init.Orthogonal(),
-                                                        b=lasagne.init.Constant(0.001))
-
-        cell_parameters = lasagne.layers.recurrent.Gate(W_in=lasagne.init.Orthogonal(), 
-                                                        W_hid=lasagne.init.Orthogonal(),
-                                                        # Setting W_cell to None denotes that no cell connection will be used. 
-                                                        W_cell=None, 
-                                                        b=lasagne.init.Constant(0.001),
-                                                        # By convention, the cell nonlinearity is tanh in an LSTM. 
-                                                        nonlinearity=lasagne.nonlinearities.tanh)
-
-        l_lstm = lasagne.layers.recurrent.LSTMLayer(l_in, 
-                                                    num_units=self.rnn_units,
-                                                    # Here, we supply the gate parameters for each gate 
-                                                    ingate=gate_parameters, forgetgate=gate_parameters, 
-                                                    cell=cell_parameters, outgate=gate_parameters,
-                                                    # We'll learn the initialization and use gradient clipping 
-                                                    learn_init=True)
-
-        # The back directional LSTM layers
-        l_lstm_back = lasagne.layers.recurrent.LSTMLayer(l_in,
-                                                         num_units=self.rnn_units,
-                                                         ingate=gate_parameters, forgetgate=gate_parameters, 
-                                                         cell=cell_parameters, outgate=gate_parameters,
-                                                         # We'll learn the initialization and use gradient clipping 
-                                                         learn_init=True,
-                                                         backwards=True)
-
-        # Do sum up of bidirectional LSTM results
-        l_out_right = lasagne.layers.SliceLayer(l_lstm, -1, 1)
-        l_out_left = lasagne.layers.SliceLayer(l_lstm_back, -1, 1)
-        l_sum = lasagne.layers.ElemwiseSumLayer([l_out_right, l_out_left])
-
-        reasoner_result = lasagne.layers.get_output(l_sum, {l_in: encode_merge}, deterministic = True)
-        reasoner_params = lasagne.layers.get_all_params(l_sum)
+        reasoner_result = lasagne.layers.get_output(self.reasoner.output, {self.reasoner.l_in: encode_merge})
 
 
-        l_in = lasagne.layers.InputLayer(shape=(None, self.rnn_units * 2))
+        l_in = lasagne.layers.InputLayer(shape=(None, self.rnn_units[0] * 2))
         
         l_hid1 = lasagne.layers.DenseLayer(l_in, num_units = 512, nonlinearity=lasagne.nonlinearities.tanh)
         l_hid = lasagne.layers.DenseLayer(l_hid1, num_units = 1, nonlinearity=self.score_func_nonlin)
@@ -175,7 +142,7 @@ class Hierachi_RNN(object):
         self.cost = lasagne.objectives.aggregate(cost + 0.0001*dnn_penalty_mean, mode='mean')
 
         # Retrieve all parameters from the network
-        all_params = self.encoder.all_params + reasoner_params + final_class_param
+        all_params = self.encoder.all_params + self.reasoner.all_params + final_class_param
 
         all_updates = lasagne.updates.adam(self.cost, all_params, learning_rate=0.001)
         # all_updates = lasagne.updates.momentum(self.cost, all_params, learning_rate = 0.05, momentum=0.9)
@@ -364,7 +331,11 @@ class Hierachi_RNN(object):
                 train_story_mask = [utils.mask_generator(batch_sent) for batch_sent in train_story]
                 train_end1_mask = utils.mask_generator(end1)
                 train_end2_mask = utils.mask_generator(end2)
-                
+               # print len(train_story)
+               # print train_end1_matrix.shape
+               # print train_end2_matrix.shape
+               # print train_end1_mask.shape
+               # print train_end2_mask.shape
 
                 cost, prediction1, prediction2 = self.train_func(train_story_matrices[0],
                                                                  train_story_matrices[1],

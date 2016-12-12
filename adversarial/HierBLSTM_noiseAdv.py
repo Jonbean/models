@@ -132,7 +132,7 @@ class Hierachi_RNN(object):
                 assert self.sent_rnn_units[-1] == 1
         
         if self.score_func != "DNN":
-            assert self.discrim_regularization_level == 0
+            assert self.discrim_regularization_level != 1 and self.discrim_regularization_level != 2
 
     def regularization_show(self):
         print self.discrim_regularization_dict[self.discrim_regularization_level]
@@ -196,7 +196,7 @@ class Hierachi_RNN(object):
                                     self.regularization_index * self.penalty_generator(sefl.encoder.all_params)
         elif self.discrim_regularization_level == 3:
             self.all_discrim_cost = self.discrim_cost + \
-                                    self.regularization_index * self.penalty_generator(self.encoder.all_params) + \
+                                    self.regularization_index * self.penalty_generator(self.encoder.all_params)
         elif self.discrim_regularization_level == 4:
             self.all_discrim_cost = self.discrim_cost + \
                                     self.regularization_index * self.penalty_generator(self.encoder.all_params) + \
@@ -649,7 +649,11 @@ class Hierachi_RNN(object):
 
             print "======================================="
             print "epoch summary:"
-            print "average cost in this epoch: ", total_disc_cost/max_batch
+            if self.loss_type == "hinge":
+                acc = total_disc_cost / max_batch
+            else:
+                acc = total_disc_cost / (max_batch * 2)
+            print "average cost in this epoch: ", acc 
             print "average speed: ", N_TRAIN_INS/(time.time() - start_time), "instances/s "
             print "accuracy for this epoch: "+str(total_correct_count/(max_batch * N_BATCH) * 100.0)+"%"
  
