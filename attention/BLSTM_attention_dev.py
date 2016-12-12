@@ -7,6 +7,7 @@ import time
 import utils
 import cPickle as pickle
 import BLSTM_sequence
+import BLSTM_Encoder
 import sys
 # from theano.printing import pydotprint
 
@@ -15,10 +16,12 @@ import sys
 
 class Hierachi_RNN(object):
     def __init__(self, 
-                 rnn_setting, 
+                 word_rnn_setting,
+                 sent_rnn_setting, 
                  dropout_rate, 
                  batchsize, 
                  val_split_ratio, 
+                 wemb_trainable = '0',
                  wemb_size = None):
         # Initialize Theano Symbolic variable attributes
         self.story_input_variable = None
@@ -36,7 +39,8 @@ class Hierachi_RNN(object):
 
         self.wemb_matrix_path = '../../data/pickles/index_wemb_matrix.pkl'
 
-        self.rnn_units = int(rnn_setting)
+        self.word_rnn_units = int(word_rnn_setting)
+        self.sent_rnn_units = int(sent_rnn_setting)
         # self.mlp_units = [int(elem) for elem in mlp_setting.split('x')]
         self.bilinear_matrix = theano.shared(0.002*np.random.rand(self.rnn_units, self.rnn_units)-0.001)
         self.dropout_rate = float(dropout_rate)
@@ -70,6 +74,8 @@ class Hierachi_RNN(object):
 
         self.attentioned_sent_rep1 = []
         self.attentioned_sent_rep2 = []
+        self.wemb_trainable = bool(int(wemb_trainable))
+
 
     def encoding_layer(self):
 
@@ -136,8 +142,10 @@ class Hierachi_RNN(object):
             self.reshaped_inputs_variables.append(self.inputs_variables[i].reshape([batch_size, seqlen, 1]))
 
         #initialize neural network units
-        self.encoder = BLSTM_sequence.BlstmEncoder(LSTMLAYER_1_UNITS = self.rnn_units, dropout_rate = self.dropout_rate)
-        self.encoder.build_model(self.wemb)
+        self.encoder = BLSTM_Encoder.BlstmEncoder(LSTMLAYER_UNITS = self.word_rnn_units, 
+                                                  wemb_trainable = self.wemb_trainable, 
+                                                  mode = 'sequence')
+        self.encoder.build_word_level(self.wemb)
 
         #build encoding layer
         self.encoding_layer()
@@ -147,76 +155,59 @@ class Hierachi_RNN(object):
 
         #build reasoning layers
 
-        self.merge_ls1 = [T.reshape(tensor, (tensor.shape[0], 1, tensor.shape[1])) for tensor in self.attentioned_sent_rep1]
-        self.merge_ls2 = [T.reshape(tensor, (tensor.shape[0], 1, tensor.shape[1])) for tensor in self.attentioned_sent_rep2]
+        self.merge_ls1 = [tensor.dimshuffle(0,'x',1) for tensor in self.attentioned_sent_rep1]
+        self.merge_ls2 = [tensor.dimshuffle(0,'x',1) for tensor in self.attentioned_sent_rep2]
 
         encode_merge1 = T.concatenate(self.merge_ls1, axis = 1)
         encode_merge2 = T.concatenate(self.merge_ls2, axis = 1)
 
-        l_in = lasagne.layers.InputLayer(shape=(None, None, self.rnn_units))
-        gate_parameters = lasagne.layers.recurrent.Gate(W_in=lasagne.init.Orthogonal(), 
-                                                        W_hid=lasagne.init.Orthogonal(),
-                                                        b=lasagne.init.Constant(0.))
+        self.reasoner = BLSTM_Encoder.BlstmEncoder(LSTMLAYER_UNITS = self.sent_rnn_units, 
+                                                   wemb_trainable = False, 
+                                                   mode = 'last')
 
-        cell_parameters = lasagne.layers.recurrent.Gate(W_in=lasagne.init.Orthogonal(), 
-                                                        W_hid=lasagne.init.Orthogonal(),
-                                                        # Setting W_cell to None denotes that no cell connection will be used. 
-                                                        W_cell=None, 
-                                                        b=lasagne.init.Constant(0.),
-                                                        # By convention, the cell nonlinearity is tanh in an LSTM. 
-                                                        nonlinearity=lasagne.nonlinearities.tanh)
+        reasoner_result1 = lasagne.layers.get_output(self.reasoner.output, 
+                                                    {self.reasoner.l_in: encode_merge1})
+        reasoner_result2 = lasagne.layers.get_output(self.reasoner.output, 
+                                                    {self.reasoner.l_in: encode_merge2})
 
-        l_lstm = lasagne.layers.recurrent.LSTMLayer(l_in, 
-                                                    num_units=self.rnn_units,
-                                                    # Here, we supply the gate parameters for each gate 
-                                                    ingate=gate_parameters, forgetgate=gate_parameters, 
-                                                    cell=cell_parameters, outgate=gate_parameters,
-                                                    # We'll learn the initialization and use gradient clipping 
-                                                    learn_init=True)
+        l_in = lasagne.layers.InputLayer(shape=(None, self.rnn_units * 2))
+        
+        l_hid1 = lasagne.layers.DenseLayer(l_in, num_units = 512, nonlinearity=lasagne.nonlinearities.tanh)
+        l_hid = lasagne.layers.DenseLayer(l_hid1, num_units = 1, nonlinearity=self.score_func_nonlin)
 
-        # The back directional LSTM layers
-        l_lstm_back = lasagne.layers.recurrent.LSTMLayer(l_in,
-                                                         num_units=self.rnn_units,
-                                                         ingate=gate_parameters, forgetgate=gate_parameters, 
-                                                         cell=cell_parameters, outgate=gate_parameters,
-                                                         # We'll learn the initialization and use gradient clipping 
-                                                         learn_init=True,
-                                                         backwards=True)
+        final_class_param = lasagne.layers.get_all_params(l_hid)
 
-        # Do sum up of bidirectional LSTM results
-        l_out_right = lasagne.layers.SliceLayer(l_lstm, -1, 1)
-        l_out_left = lasagne.layers.SliceLayer(l_lstm_back, -1, 1)
-        l_sum = lasagne.layers.ElemwiseSumLayer([l_out_right, l_out_left])
+        input_matrix1 = T.concatenate((reasoner_result1, self.train_encodinglayer_vecs[4]), axis = 1)
+        input_matrix2 = T.concatenate((reasoner_result2, self.train_encodinglayer_vecs[5]), axis = 1)
 
-        reasoner_result1 = lasagne.layers.get_output(l_sum, {l_in: encode_merge1}, deterministic = True)
-        reasoner_result2 = lasagne.layers.get_output(l_sum, {l_in: encode_merge2}, deterministic = True)
+        score1 = lasagne.layers.get_output(l_hid, {l_in: input_matrix1})
+        score2 = lasagne.layers.get_output(l_hid, {l_in: input_matrix2})
 
-        reasoner_params = lasagne.layers.get_all_params(l_sum)
 
-        score1 = T.batched_dot(T.dot(reasoner_result1, self.bilinear_matrix), self.train_encodinglayer_vecs[4])
-        score2 = T.batched_dot(T.dot(reasoner_result2, self.bilinear_matrix), self.train_encodinglayer_vecs[5])
-
-        prob = T.nnet.softmax(T.concatenate([score1.reshape([-1, 1]), score2.reshape([-1, 1])], axis = 1))
         # Construct symbolic cost function
-        target = T.vector('gold_target', dtype= 'int64')
+        target1 = T.vector('gold_target1', dtype= theano.config.floatX)
+        target2 = T.vector('gold_target2', dtype= theano.config.floatX)
 
-        cost = lasagne.objectives.categorical_crossentropy(prob, target)
+        cost = target1 * score1 + target2 * score2 + 1.0
+        
+        dnn_penalty = [lasagne.regularization.l2(param) for param in final_class_param]
 
-        self.cost = lasagne.objectives.aggregate(cost, mode='sum')
+        dnn_penalty_mean = lasagne.objectives.aggregate(T.stack(dnn_penalty), mode = 'mean')
 
+        self.cost = lasagne.objectives.aggregate(cost + 0.0001*dnn_penalty_mean, mode='mean')
 
         # Retrieve all parameters from the network
-        all_params = self.encoder.all_params + reasoner_params + [self.bilinear_matrix]
+        all_params = self.encoder.all_params + reasoner_params + final_class_param
 
         all_updates = lasagne.updates.adam(self.cost, all_params, learning_rate=0.001)
         # all_updates = lasagne.updates.momentum(self.cost, all_params, learning_rate = 0.05, momentum=0.9)
 
-        self.train_func = theano.function(self.inputs_variables + self.inputs_masks + [target], 
-                                        [self.cost, prob], updates = all_updates)
+        self.train_func = theano.function(self.inputs_variables + self.inputs_masks + [target1, target2], 
+                                         [self.cost, score1, score2], updates = all_updates)
 
         # Compute adam updates for training
 
-        self.prediction = theano.function(self.inputs_variables + self.inputs_masks, prob)
+        self.prediction = theano.function(self.inputs_variables + self.inputs_masks, [score1, score2])
         # pydotprint(self.train_func, './computational_graph.png')
 
     def load_data(self):
@@ -255,39 +246,6 @@ class Hierachi_RNN(object):
         else:
             self.wemb = theano.shared(pickle.load(open(self.wemb_matrix_path))).astype(theano.config.floatX)
 
-    def fake_load_data(self):
-        self.train_story = []
-        self.train_story.append(np.concatenate((np.random.randint(10, size = (50, 10)), 10+np.random.randint(10, size=(50,10))),axis=0).astype('int64'))
-        self.train_story.append(np.ones((100, 10)).astype('int64'))
-        self.train_story.append(np.ones((100, 10)).astype('int64'))
-        self.train_story.append(np.ones((100, 10)).astype('int64'))
-        self.train_story = np.asarray(self.train_story).reshape([100,4,10])
-
-        self.train_ending = np.concatenate((2 * np.ones((50, 5)), np.ones((50, 5))), axis = 0)
-        self.val_story = []
-        self.val_story.append(np.random.randint(10, size = (100, 10)).astype('int64'))
-        self.val_story.append(np.random.randint(10, size = (100, 10)).astype('int64'))
-        self.val_story.append(np.random.randint(10, size = (100, 10)).astype('int64'))
-        self.val_story.append(np.random.randint(10, size = (100, 10)).astype('int64'))
-
-        self.val_ending1 = np.ones((100, 10)).astype('int64')
-        self.val_ending2 = 2*np.ones((100, 10)).astype('int64')
-        self.val_answer = np.zeros(100)
-        self.n_val = self.val_answer.shape[0]
-
-        self.test_story = []
-        self.test_story.append(np.random.randint(20, size = (100, 10)).astype('int64'))
-        self.test_story.append(np.random.randint(20, size = (100, 10)).astype('int64'))
-        self.test_story.append(np.random.randint(20, size = (100, 10)).astype('int64'))
-        self.test_story.append(np.random.randint(20, size = (100, 10)).astype('int64'))
-
-        self.test_ending1 = np.ones((100, 10)).astype('int64')
-        self.test_ending2 = 2*np.ones((100, 10)).astype('int64')
-        self.test_answer = np.ones(100)
-        self.n_test = self.test_answer.shape[0]
-
-
-        self.wemb = theano.shared(np.random.rand(30, self.rnn_units)).astype(theano.config.floatX)
 
 
     def val_set_test(self):
@@ -304,12 +262,12 @@ class Hierachi_RNN(object):
             ending2 = np.asarray(self.val_ending2[i], dtype='int64').reshape((1,-1))
             ending2_mask = np.ones((1, len(self.val_ending2[i])))
 
-            prob = self.prediction(story[0], story[1], story[2], story[3], 
-                                       ending1, ending2, story_mask[0], story_mask[1], story_mask[2],
-                                       story_mask[3], ending1_mask, ending2_mask)
-
+            score1, score2 = self.prediction(story[0], story[1], story[2], story[3], 
+                                             ending1, ending2, story_mask[0], story_mask[1], story_mask[2],
+                                             story_mask[3], ending1_mask, ending2_mask)
+            
             # Answer denotes the index of the anwer
-            prediction = np.argmax(prob)
+            prediction = np.argmax(np.concatenate((score1, score2), axis=1))
 
 
             if prediction == self.val_answer[i]:
@@ -332,13 +290,12 @@ class Hierachi_RNN(object):
             ending2 = np.asarray(self.test_ending2[i], dtype='int64').reshape((1,-1))
             ending2_mask = np.ones((1, len(self.test_ending2[i])))
 
-            prob = self.prediction(story[0], story[1], story[2], story[3], 
-                                ending1, ending2, story_mask[0], story_mask[1], story_mask[2],
-                                story_mask[3], ending1_mask, ending2_mask)
+            score1, score2 = self.prediction(story[0], story[1], story[2], story[3], 
+                                             ending1, ending2, story_mask[0], story_mask[1], story_mask[2],
+                                             story_mask[3], ending1_mask, ending2_mask)
             
             # Answer denotes the index of the anwer
-            prediction = np.argmax(prob)
-
+            prediction = np.argmax(np.concatenate((score1, score2), axis=1))
 
             if prediction == self.test_answer[i]:
                 correct += 1.
@@ -347,30 +304,30 @@ class Hierachi_RNN(object):
         return correct/self.n_test
 
 
-    # def saving_model(self, val_or_test, accuracy):
-    #     reason_params_value = lasagne.layers.get_all_param_values(self.reason_layer.output)
-    #     classif_params_value = lasagne.layers.get_all_param_values(self.classify_layer.output)
+    def saving_model(self, val_or_test, accuracy):
+        reason_params_value = lasagne.layers.get_all_param_values(self.reason_layer.output)
+        classif_params_value = lasagne.layers.get_all_param_values(self.classify_layer.output)
 
-    #     if val_or_test == 'val':
-    #         pickle.dump((reason_params_value, classif_params_value, accuracy), 
-    #                     open(self.best_val_model_save_path, 'wb'))
-    #     else:
-    #         pickle.dump((reason_params_value, classif_params_value, accuracy), 
-    #                     open(self.best_test_model_save_path, 'wb'))            
+        if val_or_test == 'val':
+            pickle.dump((reason_params_value, classif_params_value, accuracy), 
+                        open(self.best_val_model_save_path, 'wb'))
+        else:
+            pickle.dump((reason_params_value, classif_params_value, accuracy), 
+                        open(self.best_test_model_save_path, 'wb'))            
 
-    # def reload_model(self, val_or_test):
-    #     if val_or_test == 'val': 
+    def reload_model(self, val_or_test):
+        if val_or_test == 'val': 
 
-    #         reason_params, classif_params, accuracy = pickle.load(open(self.best_val_model_save_path))
-    #         lasagne.layers.set_all_param_values(self.reason_layer.output, reason_params)
-    #         lasagne.layers.set_all_param_values(self.classify_layer.output, classif_params)
+            reason_params, classif_params, accuracy = pickle.load(open(self.best_val_model_save_path))
+            lasagne.layers.set_all_param_values(self.reason_layer.output, reason_params)
+            lasagne.layers.set_all_param_values(self.classify_layer.output, classif_params)
 
-    #         print "This model has ", accuracy * 100, "%  accuracy on valid set" 
-    #     else:
-    #         reason_params, classif_params, accuracy = pickle.load(open(self.best_test_model_save_path))
-    #         lasagne.layers.set_all_param_values(self.reason_layer.output, reason_params)
-    #         lasagne.layers.set_all_param_values(self.classify_layer.output, classif_params_value)
-    #         print "This model has ", accuracy * 100, "%  accuracy on test set" 
+            print "This model has ", accuracy * 100, "%  accuracy on valid set" 
+        else:
+            reason_params, classif_params, accuracy = pickle.load(open(self.best_test_model_save_path))
+            lasagne.layers.set_all_param_values(self.reason_layer.output, reason_params)
+            lasagne.layers.set_all_param_values(self.classify_layer.output, classif_params_value)
+            print "This model has ", accuracy * 100, "%  accuracy on test set" 
 
     def begin_train(self):
         N_EPOCHS = 100
@@ -419,16 +376,9 @@ class Hierachi_RNN(object):
                 # target2 = 1 - target1
                 answer = np.asarray([self.val_answer[index] for index in batch_index_list])
 
-                # answer_vec = np.concatenate(((1 - answer).reshape(-1,1), answer.reshape(-1,1)),axis = 1)
-                
+                target1 = 2 * answer - 1
+                target2 = -2 * answer + 1
 
-                # for i in range(N_BATCH):
-                #     if answer[i] == 0:
-                #         end1.append(train_ending[i])
-                #         end2.append(neg_end1[i])
-                #     else:
-                #         end1.append(neg_end1[i])
-                #         end2.append(train_ending[i])
 
                 train_story_matrices = [utils.padding(batch_sent) for batch_sent in train_story]
                 train_end1_matrix = utils.padding(end1)
@@ -439,24 +389,35 @@ class Hierachi_RNN(object):
                 train_end2_mask = utils.mask_generator(end2)
                 
 
-                cost, prob = self.train_func(train_story_matrices[0], train_story_matrices[1], train_story_matrices[2],
-                                                               train_story_matrices[3], train_end1_matrix, train_end2_matrix,
-                                                               train_story_mask[0], train_story_mask[1], train_story_mask[2],
-                                                               train_story_mask[3], train_end1_mask, train_end2_mask, answer)
+                cost, prediction1, prediction2 = self.train_func(train_story_matrices[0],
+                                                                 train_story_matrices[1],
+                                                                 train_story_matrices[2],
+                                                                 train_story_matrices[3],
+                                                                 train_end1_matrix,
+                                                                 train_end2_matrix,
+                                                                 train_story_mask[0],
+                                                                 train_story_mask[1],
+                                                                 train_story_mask[2],
+                                                                 train_story_mask[3],
+                                                                 train_end1_mask,
+                                                                 train_end2_mask,
+                                                                 target1,
+                                                                 target2)
 
 
 
-                prediction = np.argmax(prob, axis = 1)
-                predict_answer = np.zeros((N_BATCH, ))
-                
-                total_err_count += (abs(predict_answer - answer)).sum()
+                prediction = np.argmax(np.concatenate((prediction1, prediction2), axis = 1), axis = 1)
+
+
+                total_err_count += (abs(prediction - answer)).sum()
+
 
                 total_cost += cost
 
             print "======================================="
             print "epoch summary:"
             print "total cost in this epoch: ", total_cost
-            print "accuracy on training set: ", (1.0-(total_err_count / (N_BATCH * (max_batch + 1)))) * 100, "%"
+            print "accuracy on training set: ", (1.0-(total_err_count / N_TRAIN_INS)) * 100, "%"
             val_result = self.val_set_test()
             print "accuracy is: ", val_result*100, "%"
             if val_result > best_val_accuracy:
@@ -470,11 +431,10 @@ class Hierachi_RNN(object):
             print "======================================="
 
 
-def main(argv):
-    wemb_size = None
-    if len(argv) > 3:
-        wemb_size = argv[3]
-    model = Hierachi_RNN(argv[0], argv[1], argv[2], wemb_size)
+   
+if __name__ == '__main__':
+
+    model = Hierachi_RNN(*sys.argv[1:])
 
     print "loading data"
     model.load_data()
@@ -485,8 +445,4 @@ def main(argv):
 
     print "training begin!"
     model.begin_train()
-    
-if __name__ == '__main__':
-    main(sys.argv[1:])
-
-
+ 
