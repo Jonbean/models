@@ -20,6 +20,7 @@ class Hierachi_RNN(object):
                  sent_rnn_setting, 
                  batchsize, 
                  val_split_ratio, 
+                 score_func_nonlin = 'default',
                  wemb_trainable = '0',
                  wemb_size = None):
         # Initialize Theano Symbolic variable attributes
@@ -45,6 +46,11 @@ class Hierachi_RNN(object):
         self.batchsize = int(batchsize)
 
         self.val_split_ratio = float(val_split_ratio)
+
+        self.score_func_nonlin = None
+        if score_func_nonlin == 'default':
+            self.score_func_nonlin = lasagne.nonlinearities.tanh
+
 
         self.wemb_size = 300
         if wemb_size == None:
