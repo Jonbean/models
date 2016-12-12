@@ -39,8 +39,8 @@ class Hierachi_RNN(object):
 
         self.wemb_matrix_path = '../../data/pickles/index_wemb_matrix.pkl'
 
-        self.word_rnn_units = int(word_rnn_setting)
-        self.sent_rnn_units = int(sent_rnn_setting)
+        self.word_rnn_units = map(int, word_rnn_setting.split('x'))
+        self.sent_rnn_units = map(int, sent_rnn_setting.split('x'))
         # self.mlp_units = [int(elem) for elem in mlp_setting.split('x')]
         self.bilinear_matrix = theano.shared(0.002*np.random.rand(self.word_rnn_units, self.word_rnn_units)-0.001)
         self.batchsize = int(batchsize)
