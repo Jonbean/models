@@ -266,7 +266,7 @@ class Hierachi_RNN(object):
             self.random_input = srng.uniform(size = (self.batchsize, self.dnn_generator_settings[0]), low = -1.0, high = 1.0)
         
 
-        fake_endings = lasagne.layers.get_output(self.DNN_generator.output, {self.DNN_generator.l_in: self.random_input})
+        self.fake_endings = lasagne.layers.get_output(self.DNN_generator.output, {self.DNN_generator.l_in: self.random_input})
 
 
         '''================PART III================'''
@@ -284,12 +284,13 @@ class Hierachi_RNN(object):
             reasoner_result = lasagne.layers.get_output(self.reasoner.output, {self.reasoner.l_in: encode_merge}, deterministic = True)
 
             self.score1 = self.batch_cosine(reasoner_result, self.train_encodinglayer_vecs[4])
-            self.score2 = self.batch_cosine(reasoner_result, fake_endings)
+            self.score2 = self.batch_cosine(reasoner_result, self.fake_endings)
             self.score3 = self.batch_cosine(reasoner_result, self.train_encodinglayer_vecs[5])
 
             score4_matrix = self.matrix_cos(reasoner_result, self.train_encodinglayer_vecs[4])
             all_other_score = score4_matrix * (T.ones_like(score4_matrix) - T.eye(score4_matrix.shape[0])) - T.eye(score4_matrix.shape[0])
             self.score4 = T.max(all_other_score, axis = 1)
+            self.max_score_index = T.argmax(all_other_score, axis = 1)
 
         elif self.score_func == 'DNN':
         #build reasoning layers
@@ -306,7 +307,7 @@ class Hierachi_RNN(object):
 
             real_pair1 = T.concatenate([reasoner_result, self.train_encodinglayer_vecs[4]], axis = 1)
             real_pair2 = T.concatenate([reasoner_result, self.train_encodinglayer_vecs[5]], axis = 1)
-            fake_pair = T.concatenate([reasoner_result, fake_endings], axis = 1)
+            fake_pair = T.concatenate([reasoner_result, self.fake_endings], axis = 1)
 
             self.score1 = lasagne.layers.get_output(self.DNN_score_func.output, 
                                                    {self.DNN_score_func.l_in: real_pair1})
@@ -317,6 +318,7 @@ class Hierachi_RNN(object):
             score4_matrix = self.matrix_DNN(reasoner_result, self.train_encodinglayer_vecs[4])
             all_other_score = score4_matrix * (T.ones_like(score4_matrix) - T.eye(score4_matrix.shape[0])) - T.eye(score4_matrix.shape[0])
             self.score4 = T.max(all_other_score, axis = 1)
+            self.max_score_index = T.argmax(all_other_score, axis = 1)
 
 
         else:
@@ -324,7 +326,7 @@ class Hierachi_RNN(object):
 
             self.merge_ls1 = [tensor.dimshuffle(0,'x',1) for tensor in self.train_encodinglayer_vecs[:4]] + [self.train_encodinglayer_vecs[4].dimshuffle(0,'x',1)]
 
-            self.merge_ls2 = [tensor.dimshuffle(0,'x',1) for tensor in self.train_encodinglayer_vecs[:4]] + [fake_endings.dimshuffle(0,'x',1)]
+            self.merge_ls2 = [tensor.dimshuffle(0,'x',1) for tensor in self.train_encodinglayer_vecs[:4]] + [self.fake_endings.dimshuffle(0,'x',1)]
 
             self.merge_ls3 = [tensor.dimshuffle(0,'x',1) for tensor in self.train_encodinglayer_vecs[:4]] + [self.train_encodinglayer_vecs[5].dimshuffle(0,'x',1)]
 
@@ -381,10 +383,12 @@ class Hierachi_RNN(object):
         all_discrim_updates.update(all_generat_updates)
         
         self.train_func = theano.function(self.inputs_variables[:5] + self.inputs_masks[:5], 
-                                         [self.discrim_cost, self.generat_cost, 
-                                         self.score1, self.score2],
+                                         [self.discrim_cost, self.generat_cost, self.max_score_index,
+                                         self.score1, self.score2, self.train_encodinglayer_vecs[4]],
                                          updates = all_discrim_updates)
 
+
+        self.monitor_func = theano.function([], [self.fake_endings])
 
         self.prediction = theano.function(self.inputs_variables + self.inputs_masks,
                                          [self.score1, self.score3]) 
@@ -590,8 +594,13 @@ class Hierachi_RNN(object):
             total_gene_cost = 0.0
             total_correct_count = 0.0
             total_penalty_cost = 0.0
+            fake_endings_mean = []
+            fake_endings_std = []
+            real_endings_mean = []
+            real_endings_std = []
 
             max_score_index = None
+
             for batch in range(max_batch):
 
                 batch_index_list = [shuffled_index_list[i] for i in range(batch * N_BATCH, (batch+1) * N_BATCH)]
@@ -619,8 +628,23 @@ class Hierachi_RNN(object):
                                               train_end_mask)
                 discrim_cost = result_list[0]
                 generat_cost = result_list[1]
-                score1 = result_list[2]
-                score2 = result_list[3]
+                max_score_index = result[2]
+                score1 = result_list[3]
+                score2 = result_list[4]
+                ending_rep = result_list[5]
+
+                if batch % 1000 == 0 and batch != 0:
+                    fake_ending = self.monitor_func()
+                    fake_ending_mean = fake_ending.sum(axis = 0)/self.batchsize
+                    fake_ending_std = （abs(fake_ending - fake_ending_mean)）.sum()/（self.batchsize * self.sent_rnn_units）
+                    fake_endings_mean.append(fake_ending_mean)
+                    fake_endings_std.append(fake_ending_std)
+
+                    real_ending_mean = ending_rep.sum(axis = 0)/self.batchsize
+                    real_ending_std = (abs(ending_rep - real_ending_mean)).sum()/(self.batchsize * self.sent_rnn_units)
+                    real_endings_mean.append(real_ending_mean)
+                    real_endings_std.append(real_ending_std)
+
 
                 if self.loss_type == "hinge":
                     total_correct_count += np.count_nonzero((score1.flatten() - score2.flatten()).clip(0.0))
@@ -655,23 +679,29 @@ class Hierachi_RNN(object):
                     print "discriminator cost per instances:", total_disc_cost/(batch+1)
                     print "generator cost per instances:", total_gene_cost/(batch+1)
 
-              #      print "example negative ending:"
-              #      '''===================================================='''
-              #      '''randomly print out a story and it's higest score ending
-              #         competitive in a minibatch                          '''
-              #      '''===================================================='''
-              #      rand_index = np.random.randint(self.batchsize)
-              #      index = shuffled_index_list[N_BATCH * batch + rand_index]
+                    '''===================================================='''
+                    '''randomly print out a story and it's higest score end'''
+                    '''competitive in a minibatch                          '''
+                    '''===================================================='''                   
+                    print "example negative ending:"
 
-              #      story_string = " | ".join([" ".join([self.index2word_dict[self.train_story[index][j][k]] for k in range(len(self.train_story[index][j]))]) for j in range(5)])
-              #      story_end = " ".join([self.index2word_dict[self.train_ending[index][k]] for k in range(len(self.train_ending[index]))])
-              #      highest_score_end = " ".join([self.index2word_dict[self.train_ending[max_score_index[rand_index]][k]] for k in range(len(self.train_ending[max_score_index[rand_index]]))])
+                    rand_index = np.random.randint(self.batchsize)
+                    index = shuffled_index_list[N_BATCH * batch + rand_index]
 
-              #      print story_string 
-              #      print " #END# " + story_end
-              #      print ""
-              #      print "Highest Score Ending in this batch: " + highest_score_end 
-              #      print ""
+                    story_string = " | ".join([" ".join([self.index2word_dict[self.train_story[index][j][k]] for k in range(len(self.train_story[index][j]))]) for j in range(5)])
+                    story_end = " ".join([self.index2word_dict[self.train_ending[index][k]] for k in range(len(self.train_ending[index]))])
+                    highest_score_end = " ".join([self.index2word_dict[self.train_ending[max_score_index[rand_index]][k]] for k in range(len(self.train_ending[max_score_index[rand_index]]))])
+
+                    print story_string 
+                    print " #END# " + story_end
+                    print ""
+                    print "Highest Score Ending in this batch: " + highest_score_end 
+                    print ""
+                    pickle.dump([fake_endings_mean, fake_endings_std, real_endings_mean, real_endings_std],
+                                open('../../data/pickles/adv_mean_std_record.pkl', 'w'))
+
+
+
 
 
 
