@@ -145,7 +145,6 @@ class BlstmEncoder(object):
         # The back directional LSTM layers
         l_lstm_back = lasagne.layers.recurrent.LSTMLayer(self.l_in,
                                                          num_units=self.layer_units[0],
-                                                         mask_input = self.l_mask,
                                                          ingate=gate_parameters, 
                                                          forgetgate=gate_parameters, 
                                                          cell=cell_parameters, 
@@ -231,7 +230,6 @@ class BlstmEncoder(object):
         # The back directional LSTM layers
         l_lstm_back1 = lasagne.layers.recurrent.LSTMLayer(self.l_in,
                                                          num_units=self.layer_units[0],
-                                                         mask_input = self.l_mask,
                                                          ingate=gate_parameters, 
                                                          forgetgate=gate_parameters, 
                                                          cell=cell_parameters, 
@@ -243,7 +241,6 @@ class BlstmEncoder(object):
 
         l_lstm_back = lasagne.layers.recurrent.LSTMLayer(l_lstm_back1,
                                                          num_units=self.layer_units[1],
-                                                         mask_input = self.l_mask,
                                                          ingate=gate_parameters, 
                                                          forgetgate=gate_parameters, 
                                                          cell=cell_parameters, 
