@@ -43,14 +43,7 @@ class LSTMDecoder(object):
                                                         # By convention, the cell nonlinearity is tanh in an LSTM. 
                                                         nonlinearity=lasagne.nonlinearities.tanh)
 
-        classification_cell = lasagne.layers.recurrent.Gate(W_in=lasagne.init.Orthogonal(), 
-                                                            W_hid=lasagne.init.Orthogonal(),
-                                                            # Setting W_cell to None denotes that no cell connection will be used. 
-                                                            W_cell=None, 
-                                                            b=lasagne.init.Constant(self.bias),
-                                                            # By convention, the cell nonlinearity is tanh in an LSTM. 
-                                                            nonlinearity=lasagne.nonlinearities.softmax)
-        # The embedding layers with retieve subtensor from word embedding matrix
+       # The embedding layers with retieve subtensor from word embedding matrix
         # l_emb = lasagne.layers.EmbeddingLayer(self.l_in, input_size=self.wemb.get_value().shape[0], output_size=self.wemb.get_value().shape[1], W=self.wemb)
 
         # l_emb.params[l_emb.W].remove('trainable')
@@ -71,7 +64,7 @@ class LSTMDecoder(object):
                                                     mask_input=self.l_mask,
                                                     ingate=gate_parameters,
                                                     forgetgate=gate_parameters, 
-                                                    cell=classification_cell,
+                                                    cell=gate_parameters,
                                                     outgate=gate_parameters,
                                                     learn_init=True,
                                                     grad_clipping=self.GRAD_CLIP)
