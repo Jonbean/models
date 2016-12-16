@@ -15,7 +15,7 @@ class LSTMDecoder(object):
         self.l_mask = None
         self.output = None
         self.dropout_rate = 0.0
-        self.wemb_trainable = wemb_trainable
+        # self.wemb_trainable = 
         self.mode = mode
 
 
