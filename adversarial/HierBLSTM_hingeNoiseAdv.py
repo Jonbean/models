@@ -33,7 +33,8 @@ class Hierachi_RNN(object):
                  dnn_discriminator_setting = '512x1',
                  discrim_regularization_level = 0,
                  generat_regularization_level = 0,
-                 regularization_index = '1E-4'):
+                 regularization_index = '1E-4',
+                 gouda_test = 'local'):
         # Initialize Theano Symbolic variable attributes
         self.story_input_variable = None
         self.story_mask = None
@@ -119,7 +120,9 @@ class Hierachi_RNN(object):
         self.generat_regularization_dict = {0:"no regularization on generator",
                                             1:"L2 on generator DNN"}
         self.regularization_index = float(regularization_index)
-
+        self.monitor_save_path = '../../data/pickles/adv_mean_std_record.pkl'
+        if gouda_test != 'local':
+            self.monitor_save_path = '/share/data/speech/Data/joncai/adv_monitor/'+gouda_test+'.pkl'
         if self.loss_type == 'log':
             assert self.dnn_discriminator_setting[-1] == 2
             assert self.score_func != 'cos'
@@ -168,25 +171,25 @@ class Hierachi_RNN(object):
         return batch_cosine_vec.reshape((-1,1))
 
     def matrix_DNN(self, batch_rep1, batch_rep2):
-        batch_rep1_broad = batch_rep1 + T.zeros((self.batch_m, self.batch_m, self.rnn_units))
+        batch_rep1_broad = batch_rep1 + T.zeros((self.batchsize, self.batchsize, self.sent_rnn_units[-1]))
         
-        batch_rep2_broad = batch_rep2 + T.zeros((self.batch_m, self.batch_m, self.rnn_units))        
-        batch_rep1_reshape = batch_rep1_broad.dimshuffle(1,0,2).reshape((-1, self.rnn_units))
-        batch_rep2_reshape = batch_rep2_broad.reshape((-1, self.rnn_units))
+        batch_rep2_broad = batch_rep2 + T.zeros((self.batchsize, self.batchsize, self.sent_rnn_units[-1]))        
+        batch_rep1_reshape = batch_rep1_broad.dimshuffle(1,0,2).reshape((-1, self.sent_rnn_units[-1]))
+        batch_rep2_reshape = batch_rep2_broad.reshape((-1, self.sent_rnn_units[-1]))
         
         batch_concate_input = T.concatenate([batch_rep1_reshape, batch_rep2_reshape], axis = 1)        
         batch_score = lasagne.layers.get_output(self.DNN_score_func.output, 
                                                {self.DNN_score_func.l_in: batch_concate_input})
-        return batch_score.reshape((self.batch_m, self.batch_m))
+        return batch_score.reshape((self.batchsize, self.batchsize))
 
     def matrix_cos(self, batch_rep1, batch_rep2):
-        batch_rep1_broad = batch_rep1 + T.zeros((self.batch_m, self.batch_m, self.rnn_units))
+        batch_rep1_broad = batch_rep1 + T.zeros((self.batchsize, self.batchsize, self.sent_rnn_units[-1]))
         
-        batch_rep2_broad = batch_rep2 + T.zeros((self.batch_m, self.batch_m, self.rnn_units))
-        batch_rep1_reshape = batch_rep1_broad.dimshuffle(1,0,2).reshape((-1, self.rnn_units))
-        batch_rep2_reshape = batch_rep2_broad.reshape((-1, self.rnn_units))
+        batch_rep2_broad = batch_rep2 + T.zeros((self.batchsize, self.batchsize, self.sent_rnn_units[-1]))
+        batch_rep1_reshape = batch_rep1_broad.dimshuffle(1,0,2).reshape((-1, self.sent_rnn_units[-1]))
+        batch_rep2_reshape = batch_rep2_broad.reshape((-1, self.sent_rnn_units[-1]))
 
-        batch_dot = (T.batched_dot(batch_rep1_reshape, batch_rep2_reshape)).reshape((self.batch_m, self.batch_m))
+        batch_dot = (T.batched_dot(batch_rep1_reshape, batch_rep2_reshape)).reshape((self.batchsize, self.batchsize))
         norm1 = T.sqrt(T.sum(T.sqr(batch_rep1), axis = 1))
         norm2 = T.sqrt(T.sum(T.sqr(batch_rep2), axis = 1))
         
@@ -262,7 +265,7 @@ class Hierachi_RNN(object):
 
         srng = RandomStreams(seed = 31415)
         self.random_input = None
-        if self.random_input_type = 'normal':
+        if self.random_input_type == 'normal':
             self.random_input = srng.normal(size = (self.batchsize, self.dnn_generator_settings[0]), avg = 0.0, std = 1.0)
         else:
             self.random_input = srng.uniform(size = (self.batchsize, self.dnn_generator_settings[0]), low = -1.0, high = 1.0)
@@ -289,9 +292,15 @@ class Hierachi_RNN(object):
             self.score2 = self.batch_cosine(reasoner_result, self.fake_endings)
             self.score3 = self.batch_cosine(reasoner_result, self.train_encodinglayer_vecs[5])
 
-            score4_matrix = self.matrix_cos(reasoner_result, self.train_encodinglayer_vecs[4])
-            all_other_score = score4_matrix * (T.ones_like(score4_matrix) - T.eye(score4_matrix.shape[0])) - T.eye(score4_matrix.shape[0])
-            self.score4 = T.max(all_other_score, axis = 1)
+            self.score4_matrix = self.matrix_cos(reasoner_result, self.train_encodinglayer_vecs[4])
+
+            index_sort_matrix = T.argsort(self.score4_matrix, axis = 1)
+            score_mask_matrix = T.arange(self.batchsize).dimshuffle(0,'x')
+            trap_diagonal_matrix = T.argmin(abs(index_sort_matrix - score_mask_matrix), axis = 1)
+            self.hinge_prob_eval = trap_diagonal_matrix/(self.batchsize - 1.0)
+ 
+            all_other_score = self.score4_matrix * (T.ones_like(self.score4_matrix) - T.eye(self.score4_matrix.shape[0])) - T.eye(self.score4_matrix.shape[0])
+            self.score4 = T.max(all_other_score, axis = 1, keepdims = True)
             self.max_score_index = T.argmax(all_other_score, axis = 1)
 
         elif self.score_func == 'DNN':
@@ -317,9 +326,15 @@ class Hierachi_RNN(object):
                                                    {self.DNN_score_func.l_in: fake_pair})
             self.score3 = lasagne.layers.get_output(self.DNN_score_func.output, 
                                                    {self.DNN_score_func.l_in: real_pair2})
-            score4_matrix = self.matrix_DNN(reasoner_result, self.train_encodinglayer_vecs[4])
-            all_other_score = score4_matrix * (T.ones_like(score4_matrix) - T.eye(score4_matrix.shape[0])) - T.eye(score4_matrix.shape[0])
-            self.score4 = T.max(all_other_score, axis = 1)
+            self.score4_matrix = self.matrix_DNN(reasoner_result, self.train_encodinglayer_vecs[4])
+
+            index_sort_matrix = T.argsort(self.score4_matrix, axis = 1)
+            score_mask_matrix = T.arange(self.batchsize).dimshuffle(0,'x')
+            trap_diagonal_matrix = T.argmin(abs(index_sort_matrix - score_mask_matrix), axis = 1)
+            self.hinge_prob_eval = trap_diagonal_matrix/(self.batchsize - 1.0)
+            
+            all_other_score = self.score4_matrix * (T.ones_like(self.score4_matrix) - T.eye(self.score4_matrix.shape[0])) - T.eye(self.score4_matrix.shape[0])
+            self.score4 = T.max(all_other_score, axis = 1, keepdims = True)
             self.max_score_index = T.argmax(all_other_score, axis = 1)
 
 
@@ -344,7 +359,7 @@ class Hierachi_RNN(object):
         if self.loss_type == 'hinge':
 
             self.discrim_score = - self.score1 + self.delta + self.score2
-            self.batch_max_score = - self.score1 + self.delta + self.socre4
+            self.batch_max_score = - self.score1 + self.delta + self.score4
             self.generat_score = - self.score2
 
             self.discrim_score_vec = T.clip(self.discrim_score, 0.0, float('inf'))
@@ -386,7 +401,8 @@ class Hierachi_RNN(object):
         
         self.train_func = theano.function(self.inputs_variables[:5] + self.inputs_masks[:5], 
                                          [self.discrim_cost, self.generat_cost, self.max_score_index,
-                                         self.score1, self.score2, self.train_encodinglayer_vecs[4]],
+                                         self.score1, self.score2, self.score4, self.train_encodinglayer_vecs[4], 
+                                         self.hinge_prob_eval, self.score4_matrix],
                                          updates = all_discrim_updates)
 
 
@@ -594,7 +610,8 @@ class Hierachi_RNN(object):
 
             total_disc_cost = 0.0
             total_gene_cost = 0.0
-            total_correct_count = 0.0
+            total_adv_correct_count = 0.0
+            total_hinge_prob_accumu = 0.0
             total_penalty_cost = 0.0
             fake_endings_mean = []
             fake_endings_std = []
@@ -630,15 +647,19 @@ class Hierachi_RNN(object):
                                               train_end_mask)
                 discrim_cost = result_list[0]
                 generat_cost = result_list[1]
-                max_score_index = result[2]
+                max_score_index = result_list[2]
                 score1 = result_list[3]
                 score2 = result_list[4]
-                ending_rep = result_list[5]
+                score4 = result_list[5]
+                ending_rep = result_list[6]
+                hinge_prob_eval_vec = result_list[7]
+                hinge_score4_matrix = result_list[8]
 
                 if batch % 1000 == 0 and batch != 0:
+                    print "reached !"
                     fake_ending = self.monitor_func()
                     fake_ending_mean = fake_ending.sum(axis = 0)/self.batchsize
-                    fake_ending_std = （abs(fake_ending - fake_ending_mean)）.sum()/（self.batchsize * self.sent_rnn_units）
+                    fake_ending_std = (abs(fake_ending - fake_ending_mean)).sum()/(self.batchsize * self.sent_rnn_units)
                     fake_endings_mean.append(fake_ending_mean)
                     fake_endings_std.append(fake_ending_std)
 
@@ -649,11 +670,12 @@ class Hierachi_RNN(object):
 
 
                 if self.loss_type == "hinge":
-                    total_correct_count += np.count_nonzero((score1.flatten() - score2.flatten()).clip(0.0))
+                    total_adv_correct_count += np.count_nonzero((score1.flatten() - score2.flatten()).clip(0.0))
+                    total_hinge_prob_accumu += (hinge_prob_eval_vec.sum()/self.batchsize)
                 else:
                     correct1 = np.argmax(score1, axis = 1).sum()
                     correct2 = (1-np.argmax(score2, axis = 1)).sum()
-                    total_correct_count += (correct1 + correct2)
+                    total_adv_correct_count += (correct1 + correct2)
 
                 total_disc_cost += discrim_cost
                 total_gene_cost += generat_cost
@@ -661,12 +683,17 @@ class Hierachi_RNN(object):
                 if batch % test_threshold == 0 and batch != 0:
                     train_acc = 0.0
                     if self.loss_type == "hinge":
-                        train_acc = total_correct_count / ((batch+1) * N_BATCH)*100.0
+                        train_acc = total_adv_correct_count / ((batch+1) * N_BATCH)*100.0
                     else:
-                        train_acc = total_correct_count / ((batch+1) * N_BATCH * 2)*100.0
+                        train_acc = total_adv_correct_count / ((batch+1) * N_BATCH * 2)*100.0
                     print "accuracy on training set: ", train_acc, "%"
-                    print "example score sequence"
-                    print np.stack((score1, score2), axis = 1)
+                    print "average correct prob evaluation of hinge highest score: ", total_hinge_prob_accumu / ((batch+1)) * 100.0, "%"
+                    print "example real | fake | highest score sequence"
+                    print np.stack((score1, score2, score4), axis = 1)
+                    print "DNN score matrix monitor:"
+                    print hinge_score4_matrix
+                    print "max score index check:"
+                    print max_score_index
                     print "test on val set..."
                     val_result = self.eva_func('val')
                     print "accuracy is: ", val_result*100, "%"
@@ -699,8 +726,8 @@ class Hierachi_RNN(object):
                     print ""
                     print "Highest Score Ending in this batch: " + highest_score_end 
                     print ""
-                    pickle.dump([fake_endings_mean, fake_endings_std, real_endings_mean, real_endings_std],
-                                open('../../data/pickles/adv_mean_std_record.pkl', 'w'))
+                    with open(self.monitor_save_path,'w') as f:
+                        pickle.dump([fake_endings_mean, fake_endings_std, real_endings_mean, real_endings_std],f)
 
 
 
@@ -715,7 +742,7 @@ class Hierachi_RNN(object):
                 acc = total_disc_cost / (max_batch * 2)
             print "average cost in this epoch: ", acc 
             print "average speed: ", N_TRAIN_INS/(time.time() - start_time), "instances/s "
-            print "accuracy for this epoch: "+str(total_correct_count/(max_batch * N_BATCH) * 100.0)+"%"
+            print "accuracy for adv classification this epoch: "+str(total_adv_correct_count/(max_batch * N_BATCH) * 100.0)+"%"
  
             print "======================================="
 

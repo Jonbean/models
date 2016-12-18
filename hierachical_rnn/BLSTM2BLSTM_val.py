@@ -93,8 +93,7 @@ class Hierachi_RNN(object):
         for i in range(self.story_nsent+2):
             self.inputs_variables.append(T.matrix('story'+str(i)+'_input', dtype='int64'))
             self.inputs_masks.append(T.matrix('story'+str(i)+'_mask', dtype=theano.config.floatX))
-            batch_size, seqlen = self.inputs_variables[i].shape
-            self.reshaped_inputs_variables.append(self.inputs_variables[i].reshape([batch_size, seqlen, 1]))
+            self.reshaped_inputs_variables.append(self.inputs_variables[i].dimshuffle(0,1,'x'))
 
         #initialize neural network units
         self.encoder = BLSTM_Encoder.BlstmEncoder(LSTMLAYER_UNITS = self.rnn_units, wemb_trainable = self.wemb_trainable)
@@ -133,13 +132,14 @@ class Hierachi_RNN(object):
         target1 = T.vector('gold_target1', dtype= theano.config.floatX)
         target2 = T.vector('gold_target2', dtype= theano.config.floatX)
 
-        cost = target1 * score1 + target2 * score2 + 1.0
+        cost = target1.dimshuffle(0,'x') * score1 + target2.dimshuffle(0,'x') * score2 + 1.0
+        cost_scalar = lasagne.objectives.aggregate(cost, mode = 'mean')
         
         dnn_penalty = [lasagne.regularization.l2(param) for param in final_class_param]
 
-        dnn_penalty_mean = lasagne.objectives.aggregate(T.stack(dnn_penalty), mode = 'mean')
+        dnn_penalty_mean = lasagne.objectives.aggregate(T.stack(dnn_penalty), mode = 'sum')
 
-        self.cost = lasagne.objectives.aggregate(cost + 0.0001*dnn_penalty_mean, mode='mean')
+        self.cost = lasagne.objectives.aggregate(cost_scalar + 0.0001 * dnn_penalty_mean, mode = 'mean')
 
         # Retrieve all parameters from the network
         all_params = self.encoder.all_params + self.reasoner.all_params + final_class_param
@@ -148,7 +148,7 @@ class Hierachi_RNN(object):
         # all_updates = lasagne.updates.momentum(self.cost, all_params, learning_rate = 0.05, momentum=0.9)
 
         self.train_func = theano.function(self.inputs_variables + self.inputs_masks + [target1, target2], 
-                                         [self.cost, score1, score2], updates = all_updates)
+                                         [self.cost, cost_scalar, dnn_penalty_mean, score1, score2], updates = all_updates)
 
         # Compute adam updates for training
 
@@ -337,22 +337,26 @@ class Hierachi_RNN(object):
                # print train_end1_mask.shape
                # print train_end2_mask.shape
 
-                cost, prediction1, prediction2 = self.train_func(train_story_matrices[0],
-                                                                 train_story_matrices[1],
-                                                                 train_story_matrices[2],
-                                                                 train_story_matrices[3],
-                                                                 train_end1_matrix,
-                                                                 train_end2_matrix,
-                                                                 train_story_mask[0],
-                                                                 train_story_mask[1],
-                                                                 train_story_mask[2],
-                                                                 train_story_mask[3],
-                                                                 train_end1_mask,
-                                                                 train_end2_mask,
-                                                                 target1,
-                                                                 target2)
+                results = self.train_func(train_story_matrices[0],
+                                          train_story_matrices[1],
+                                          train_story_matrices[2],
+                                          train_story_matrices[3],
+                                          train_end1_matrix,
+                                          train_end2_matrix,
+                                          train_story_mask[0],
+                                          train_story_mask[1],
+                                          train_story_mask[2],
+                                          train_story_mask[3],
+                                          train_end1_mask,
+                                          train_end2_mask,
+                                          target1,
+                                          target2)
 
-
+                cost = results[0]
+                classifier_hinge_cost = results[1]
+                regularization_sum = results[2]
+                prediction1 = results[3]
+                prediction2 = results[4]
 
                 prediction = np.argmax(np.concatenate((prediction1, prediction2), axis = 1), axis = 1)
 
