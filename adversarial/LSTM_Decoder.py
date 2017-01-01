@@ -59,6 +59,8 @@ class LSTMDecoder(object):
                                                     outgate=gate_parameters,
                                                     learn_init=True,
                                                     grad_clipping=self.GRAD_CLIP)
+
+
         l_lstm2 = lasagne.layers.recurrent.LSTMLayer(l_lstm, 
                                                     num_units=self.layer_units[2],
                                                     mask_input=self.l_mask,
@@ -147,6 +149,7 @@ class LSTMDecoder(object):
         else:
             self.output = l_last_out
         self.all_params = lasagne.layers.get_all_params(self.output)
+        
     def build_score_func(self, input_dim):
         #create symbolic representation of inputs, mask and target_value
 

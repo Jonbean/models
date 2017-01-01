@@ -23,6 +23,7 @@ class Hierachi_RNN(object):
                  batchsize, 
                  dnn_generator_setting,
                  decoder_units,
+                 reasoning_type = 'concatenate',
                  wemb_trainable = 1,
                  discrim_lr = 0.001,
                  generat_lr = 0.001,
@@ -107,6 +108,7 @@ class Hierachi_RNN(object):
         self.dnn_generator_settings = map(int, dnn_generator_setting.split('x'))
         self.dnn_discriminator_setting = map(int, dnn_discriminator_setting.split('x'))
         self.decoder_units = map(int, decoder_units.split('x'))
+        self.reasoning_type = reasoning_type
 
         self.loss_type = loss_type
         self.score_func = score_func
@@ -162,6 +164,47 @@ class Hierachi_RNN(object):
                                                              deterministic = True)
 
                 self.train_encodinglayer_vecs.append(sent_seq)
+
+    def reasoning_layer(self):
+
+        if self.reasoning_type == 'concatenate':
+            merge_ls = [tensor.dimshuffle(0,'x',1) for tensor in self.train_encodinglayer_vecs[:4]]
+            encode_merge = T.concatenate(merge_ls, axis = 1)
+
+            self.plot_rep = lasagne.layers.get_output(self.reasoner.output,
+                                                {self.reaonser.l_in:self.merge_ls})
+
+            self.ending1_rep = lasagne.layers.get_output(self.reaonser.output,
+                                                  {self.reasoner.l_in:self.train_encodinglayer_vecs[4]})
+
+            self.ending2_rep = lasagne.layers.get_output(self.reaonser.output,
+                                                  {self.reasoner.l_in:self.train_encodinglayer_vecs[5]})
+
+            self.fake_end_rep = lasagne.layers.get_output(self.reasoner.output,
+                                                  {self.reasoner.l_in:self.fake_endings})
+
+        else:
+            merge_ls1 = [tensor.dimshuffle(0,'x',1) for tensor in self.train_encodinglayer_vecs[:4] + \
+                             [self.train_encodinglayer_vecs[4]]]
+            encode_merge1 = T.concatenate(merge_ls1, axis = 1)
+
+            merge_ls2 = [tensor.dimshuffle(0,'x',1) for tensor in self.train_encodinglayer_vecs[:4] + \
+                             [self.train_encodinglayer_vecs[5]]]
+            encode_merge2 = T.concatenate(merge_ls2, axis = 1)
+
+            merge_ls3 = [tensor.dimshuffle(0,'x',1) for tensor in self.train_encodinglayer_vecs[:4] + \
+                             [self.fake_endings]]
+            encode_merge3 = T.concatenate(merge_ls3, axis = 1)
+
+            self.story1_rep = lasagne.layers.get_output(self.reasoner.output,
+                                                       {self.reasoner.l_in:encode_merge1})
+            self.story2_rep = lasagne.layers.get_output(self.reasoner.output, 
+                                                       {self.reasoner.l_in:encode_merge2})
+            self.story3_rep = lasagne.layers.get_output(self.reasoner.output,
+                                                       {self.reasoner.l_in:encode_merge3})
+
+            
+
     def batch_cosine(self, batch_vectors1, batch_vectors2):
         dot_prod = T.batched_dot(batch_vectors1, batch_vectors2)
 
@@ -230,20 +273,19 @@ class Hierachi_RNN(object):
         else:
             self.all_generat_cost = self.generat_cost + self.regularization_index * self.penalty_generator(self.DNN_generator.all_params)
 
-    def decoding_layer(self):
-        for i in range(self.story_nsent):
-            batchsize, max_len = self.inputs_masks[i].shape
+    def decoding_layer(self, input_variable, input_mask):
+        batchsize, max_len = input_mask.shape
 
-            index_matrix = T.arange(max_len).dimshuffle('x', 0) + T.zeros_like(self.inputs_masks[i])
-            index_tensor = index_matrix.reshape((batchsize, max_len, 1))
+        index_matrix = T.arange(max_len).dimshuffle('x', 0) + T.zeros_like(input_mask)
+        index_tensor = index_matrix.reshape((batchsize, max_len, 1))
 
-            broad_cast_rep = self.train_encodinglayer_vecs[i].dimshuffle(0,'x',1) + T.zeros((batchsize, max_len, self.word_rnn_units[0]))
-            new_input = T.concatenate([broad_cast_rep, index_tensor], axis = 2)
+        broad_cast_rep = input_variable.dimshuffle(0,'x',1) + T.zeros((batchsize, max_len, self.word_rnn_units[0]))
+        new_input = T.concatenate([broad_cast_rep, index_tensor], axis = 2)
 
-            predict_seq = lasagne.layers.get_output(self.decoder.output, 
-                                                   {self.decoder.l_in: new_input,
-                                                    self.decoder.l_mask: self.inputs_masks[i]})
-            self.decoding_cost = lasagne.objectives.categorical_crossentropy(prediction, self.inputs_variables)
+        predict_seq = lasagne.layers.get_output(self.decoder.output, 
+                                               {self.decoder.l_in: new_input,
+                                                self.decoder.l_mask: input_mask})
+        return predict_seq
 
     def model_constructor(self, wemb_size = None):
         self.inputs_variables = []
@@ -269,6 +311,7 @@ class Hierachi_RNN(object):
         
         self.reasoner = BLSTM_Encoder.BlstmEncoder(self.sent_rnn_units,
                                                    mode = 'last')
+        self.reasoner.build_sent_level(self.word_rnn_units[0])
 
         '''================PART II================'''
         '''             DNN GENERATION            '''
@@ -282,7 +325,7 @@ class Hierachi_RNN(object):
 
         srng = RandomStreams(seed = 31415)
         self.random_input = None
-        if self.random_input_type = 'normal':
+        if self.random_input_type == 'normal':
             self.random_input = srng.normal(size = (self.batchsize, self.dnn_generator_settings[0]), avg = 0.0, std = 1.0)
         else:
             self.random_input = srng.uniform(size = (self.batchsize, self.dnn_generator_settings[0]), low = -1.0, high = 1.0)
@@ -290,16 +333,26 @@ class Hierachi_RNN(object):
 
         self.fake_endings = lasagne.layers.get_output(self.DNN_generator.output, {self.DNN_generator.l_in: self.random_input})
 
-        '''================PART III================'''
-        '''              LSTM Decoder              '''
-        '''========================================'''
+        '''================PART IV================'''
+        '''              LSTM REASONING           '''
+        '''======================================='''
+        self.reasoning_layer()
+
+        '''================PART V================='''
+        '''              LSTM Decoder             '''
+        '''======================================='''
         # Sentence level decoder can be added later
 
         self.decoder = LSTM_Decoder.LSTMDecoder(self.decoder_units)
         self.decoder.index_label_classi_decoder()
+        self.decoding_cost = 0.0
+        for i in range(self.story_nsent+1):
+            prediction = self.decoding_layer(self.train_encodinglayer_vecs[i], self.inputs_masks[i])
+            prediction_reshape = prediction.reshape((-1, self.wemb_size))
+            self.decoding_cost += lasagne.objectives.categorical_crossentropy(prediction_reshape, self.inputs_variables[i].reshape(-1,1))
 
 
-        '''================PART IV================'''
+        '''================PART VI================'''
         '''                SCOREING                '''
         '''========================================'''
 
@@ -308,66 +361,61 @@ class Hierachi_RNN(object):
         #build reasoning layers
             self.reasoner.build_sent_level(self.word_rnn_units[0])
 
-            self.merge_ls = [tensor.dimshuffle(0,'x',1) for tensor in self.train_encodinglayer_vecs[:4]]
-            encode_merge = T.concatenate(self.merge_ls, axis = 1)
 
-            reasoner_result = lasagne.layers.get_output(self.reasoner.output, {self.reasoner.l_in: encode_merge}, deterministic = True)
+            self.score1 = self.batch_cosine(self.plot_rep, self.ending1_rep)
+            self.score2 = self.batch_cosine(self.plot_rep, self.fake_endings)
+            self.score3 = self.batch_cosine(self.plot_rep, self.ending2_rep)
 
-            self.score1 = self.batch_cosine(reasoner_result, self.train_encodinglayer_vecs[4])
-            self.score2 = self.batch_cosine(reasoner_result, self.fake_endings)
-            self.score3 = self.batch_cosine(reasoner_result, self.train_encodinglayer_vecs[5])
-
-            score4_matrix = self.matrix_cos(reasoner_result, self.train_encodinglayer_vecs[4])
+            score4_matrix = self.matrix_cos(self.plot_rep, self.ending1_rep)
             all_other_score = score4_matrix * (T.ones_like(score4_matrix) - T.eye(score4_matrix.shape[0])) - T.eye(score4_matrix.shape[0])
             self.score4 = T.max(all_other_score, axis = 1)
             self.max_score_index = T.argmax(all_other_score, axis = 1)
 
         elif self.score_func == 'DNN':
         #build reasoning layers
-            self.reasoner.build_sent_level(self.word_rnn_units[0])
 
-            self.DNN_score_func = DNN.DNN(INPUTS_SIZE = self.sent_rnn_units[-1] + self.dnn_generator_settings[-1], 
-                                          LAYER_UNITS = self.dnn_discriminator_setting, 
-                                          final_nonlin = self.nonlin_func)
+            if self.reasoning_type == 'concatenate':
 
-            self.merge_ls = [tensor.dimshuffle(0,'x',1) for tensor in self.train_encodinglayer_vecs[:4]]
-            encode_merge = T.concatenate(self.merge_ls, axis = 1)
-
-            reasoner_result = lasagne.layers.get_output(self.reasoner.output, {self.reasoner.l_in: encode_merge}, deterministic = True)
-
-            real_pair1 = T.concatenate([reasoner_result, self.train_encodinglayer_vecs[4]], axis = 1)
-            real_pair2 = T.concatenate([reasoner_result, self.train_encodinglayer_vecs[5]], axis = 1)
-            fake_pair = T.concatenate([reasoner_result, self.fake_endings], axis = 1)
-
-            self.score1 = lasagne.layers.get_output(self.DNN_score_func.output, 
-                                                   {self.DNN_score_func.l_in: real_pair1})
-            self.score2 = lasagne.layers.get_output(self.DNN_score_func.output, 
-                                                   {self.DNN_score_func.l_in: fake_pair})
-            self.score3 = lasagne.layers.get_output(self.DNN_score_func.output, 
-                                                   {self.DNN_score_func.l_in: real_pair2})
-            score4_matrix = self.matrix_DNN(reasoner_result, self.train_encodinglayer_vecs[4])
-            all_other_score = score4_matrix * (T.ones_like(score4_matrix) - T.eye(score4_matrix.shape[0])) - T.eye(score4_matrix.shape[0])
-            self.score4 = T.max(all_other_score, axis = 1)
-            self.max_score_index = T.argmax(all_other_score, axis = 1)
+                self.DNN_score_func = DNN.DNN(INPUTS_SIZE = self.sent_rnn_units[-1] + self.dnn_generator_settings[-1], 
+                                              LAYER_UNITS = self.dnn_discriminator_setting, 
+                                              final_nonlin = self.nonlin_func)
 
 
+                real_pair1 = T.concatenate([self.plot_rep, self.ending1_rep], axis = 1)
+                real_pair2 = T.concatenate(self.plot_rep, self.ending2_rep, axis = 1)
+                fake_pair = T.concatenate([self.plot_rep, self.fake_endings], axis = 1)
+
+                self.score1 = lasagne.layers.get_output(self.DNN_score_func.output, 
+                                                       {self.DNN_score_func.l_in: real_pair1})
+                self.score2 = lasagne.layers.get_output(self.DNN_score_func.output, 
+                                                       {self.DNN_score_func.l_in: fake_pair})
+                self.score3 = lasagne.layers.get_output(self.DNN_score_func.output, 
+                                                       {self.DNN_score_func.l_in: real_pair2})
+                score4_matrix = self.matrix_DNN(reasoner_result, self.train_encodinglayer_vecs[4])
+                all_other_score = score4_matrix * (T.ones_like(score4_matrix) - T.eye(score4_matrix.shape[0])) - T.eye(score4_matrix.shape[0])
+                self.score4 = T.max(all_other_score, axis = 1)
+                self.max_score_index = T.argmax(all_other_score, axis = 1)
+            else:
+                self.DNN_score_func = DNN.DNN(INPUTS_SIZE = self.sent_rnn_units[-1], 
+                                              LAYER_UNITS = self.dnn_discriminator_setting, 
+                                              final_nonlin = self.nonlin_func)
+                self.score1 = lasagne.layers.get_output(self.DNN_score_func.output, 
+                                                       {self.DNN_score_func.l_in: self.story1_rep})
+                self.score2 = lasagne.layers.get_output(self.DNN_score_func.output, 
+                                                       {self.DNN_score_func.l_in: self.story3_rep})
+                self.score3 = lasagne.layers.get_output(self.DNN_score_func.output, 
+                                                       {self.DNN_score_func.l_in: self.story2_rep})          
+                self.score4 = "O_oooops"
         else:
             self.reasoner.build_score_func(self.word_rnn_units[0])
 
-            self.merge_ls1 = [tensor.dimshuffle(0,'x',1) for tensor in self.train_encodinglayer_vecs[:4]] + [self.train_encodinglayer_vecs[4].dimshuffle(0,'x',1)]
-
-            self.merge_ls2 = [tensor.dimshuffle(0,'x',1) for tensor in self.train_encodinglayer_vecs[:4]] + [self.fake_endings.dimshuffle(0,'x',1)]
-
-            self.merge_ls3 = [tensor.dimshuffle(0,'x',1) for tensor in self.train_encodinglayer_vecs[:4]] + [self.train_encodinglayer_vecs[5].dimshuffle(0,'x',1)]
-
-            encode_merge1 = T.concatenate(self.merge_ls1, axis = 1)
-            encode_merge2 = T.concatenate(self.merge_ls2, axis = 1)
-            encode_merge3 = T.concatenate(self.merge_ls3, axis = 1)
 
             self.score1 = lasagne.layers.get_output(self.reasoner.output, {self.reasoner.l_in: encode_merge1})
             self.score2 = lasagne.layers.get_output(self.reasoner.output, {self.reasoner.l_in: encode_merge2})
             self.score3 = lasagne.layers.get_output(self.reasoner.output, {self.reasoner.l_in: encode_merge3})
             self.score4 = "O_oooops"
+
+        '''loss function'''
 
         if self.loss_type == 'hinge':
 
@@ -400,25 +448,27 @@ class Hierachi_RNN(object):
             if self.score_func == "DNN":
                 self.all_discrim_params += self.DNN_score_func.all_params
 
+        # testing decoding result of fake endings
+        fake_ending_interpretation = self.decoding_layer(self.fake_endings, T.ones((self.batchsize, 20)))
         # Retrieve all parameters from the network
-
         self.all_generat_params = self.DNN_generator.all_params
+        self.decoder_params = self.decoder.all_params
 
         self.discrim_cost_generator()
         self.generat_cost_generator()
 
-        all_discrim_updates = lasagne.updates.adam(self.all_discrim_cost, self.all_discrim_params, learning_rate = self.discrim_lr)
+        all_discrim_updates = lasagne.updates.adam(self.all_discrim_cost + self.decoding_cost, self.all_discrim_params, learning_rate = self.discrim_lr)
         all_generat_updates = lasagne.updates.adam(self.all_generat_cost, self.all_generat_params, learning_rate = self.generat_lr)
         # all_updates = lasagne.updates.momentum(self.cost, all_params, learning_rate = 0.05, momentum=0.9)
         all_discrim_updates.update(all_generat_updates)
         
         self.train_func = theano.function(self.inputs_variables[:5] + self.inputs_masks[:5], 
                                          [self.discrim_cost, self.generat_cost, self.max_score_index,
-                                         self.score1, self.score2, self.train_encodinglayer_vecs[4]],
+                                         self.score1, self.score2, self.train_encodinglayer_vecs[4], self.decoding_cost],
                                          updates = all_discrim_updates)
 
 
-        self.monitor_func = theano.function([], [self.fake_endings])
+        self.monitor_func = theano.function([], [self.fake_endings, fake_ending_interpretation])
 
         self.prediction = theano.function(self.inputs_variables + self.inputs_masks,
                                          [self.score1, self.score3]) 
@@ -453,6 +503,7 @@ class Hierachi_RNN(object):
         ''''=====Wemb====='''
         self.wemb = theano.shared(pickle.load(open(self.wemb_matrix_path))).astype(theano.config.floatX)
         self.wemb_size = self.wemb.get_value().shape[0]
+        self.decoder_units.append(self.wemb_size)
         '''=====Peeping Preparation====='''
         self.peeked_ends_ls = np.random.randint(self.n_train, size=(5,))
         self.ends_pool_ls = np.random.choice(range(self.n_train), 2000, replace = False)
@@ -624,10 +675,12 @@ class Hierachi_RNN(object):
             total_gene_cost = 0.0
             total_correct_count = 0.0
             total_penalty_cost = 0.0
+            total_decoding_cost = 0.0 
             fake_endings_mean = []
             fake_endings_std = []
             real_endings_mean = []
             real_endings_std = []
+
 
             max_score_index = None
 
@@ -656,17 +709,20 @@ class Hierachi_RNN(object):
                                               train_story_mask[2],
                                               train_story_mask[3],
                                               train_end_mask)
+
+
                 discrim_cost = result_list[0]
                 generat_cost = result_list[1]
                 max_score_index = result[2]
                 score1 = result_list[3]
                 score2 = result_list[4]
                 ending_rep = result_list[5]
+                decoding_cost = result_list[6]
 
                 if batch % 1000 == 0 and batch != 0:
                     fake_ending = self.monitor_func()
                     fake_ending_mean = fake_ending.sum(axis = 0)/self.batchsize
-                    fake_ending_std = （abs(fake_ending - fake_ending_mean)）.sum()/（self.batchsize * self.sent_rnn_units）
+                    fake_ending_std = (abs(fake_ending - fake_ending_mean)).sum()/(self.batchsize * self.sent_rnn_units)
                     fake_endings_mean.append(fake_ending_mean)
                     fake_endings_std.append(fake_ending_std)
 
@@ -685,6 +741,7 @@ class Hierachi_RNN(object):
 
                 total_disc_cost += discrim_cost
                 total_gene_cost += generat_cost
+                total_decoding_cost += decoding_cost
 
                 if batch % test_threshold == 0 and batch != 0:
                     train_acc = 0.0
@@ -708,6 +765,7 @@ class Hierachi_RNN(object):
                             best_test_accuracy = test_accuracy
                     print "discriminator cost per instances:", total_disc_cost/(batch+1)
                     print "generator cost per instances:", total_gene_cost/(batch+1)
+                    print "decoding cost per instances:", total_decoding_cost/(batch+1)
 
                     '''===================================================='''
                     '''randomly print out a story and it's higest score end'''
