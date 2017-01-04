@@ -345,12 +345,13 @@ class Hierachi_RNN(object):
 
         self.decoder = LSTM_Decoder.LSTMDecoder(self.decoder_units)
         self.decoder.index_label_classi_decoder()
-        self.decoding_cost = 0.0
+        self.decoding_cost_ls = []
         for i in range(self.story_nsent+1):
             prediction = self.decoding_layer(self.train_encodinglayer_vecs[i], self.inputs_masks[i])
             prediction_reshape = prediction.reshape((-1, self.wemb_size))
-            self.decoding_cost += lasagne.objectives.categorical_crossentropy(prediction_reshape, self.inputs_variables[i].reshape(-1,1))
+            self.decoding_cost_ls.append(lasagne.objectives.categorical_crossentropy(prediction_reshape, T.flatten(self.inputs_variables[i]) - 1))
 
+        self.decoding_cost = T.sum(T.concatenate(self.decoding_cost_ls))
 
         '''================PART VI================'''
         '''                SCOREING                '''
@@ -462,11 +463,16 @@ class Hierachi_RNN(object):
         # all_updates = lasagne.updates.momentum(self.cost, all_params, learning_rate = 0.05, momentum=0.9)
         all_discrim_updates.update(all_generat_updates)
         
-        self.train_func = theano.function(self.inputs_variables[:5] + self.inputs_masks[:5], 
-                                         [self.discrim_cost, self.generat_cost, self.max_score_index,
-                                         self.score1, self.score2, self.train_encodinglayer_vecs[4], self.decoding_cost],
-                                         updates = all_discrim_updates)
-
+        if self.loss_type == 'hinge':        
+            self.train_func = theano.function(self.inputs_variables[:5] + self.inputs_masks[:5], 
+                                             [self.discrim_cost, self.generat_cost, self.max_score_index,
+                                             self.score1, self.score2, self.train_encodinglayer_vecs[4], self.decoding_cost],
+                                             updates = all_discrim_updates)
+        else:
+            self.train_func = theano.function(self.inputs_variables[:5] + self.inputs_masks[:5], 
+                                             [self.discrim_cost, self.generat_cost, self.score1, 
+                                              self.score2, self.train_encodinglayer_vecs[4], self.decoding_cost],
+                                             updates = all_discrim_updates)
 
         self.monitor_func = theano.function([], [self.fake_endings, fake_ending_interpretation])
 
