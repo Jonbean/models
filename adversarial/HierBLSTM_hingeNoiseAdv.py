@@ -728,7 +728,8 @@ class Hierachi_RNN(object):
                     print ""
                     with open(self.monitor_save_path,'w') as f:
                         pickle.dump([fake_endings_mean, fake_endings_std, real_endings_mean, real_endings_std],f)
-
+                        f.flush()
+                        os.fsync(f.fileno())
 
 
 
