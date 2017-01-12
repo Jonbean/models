@@ -181,7 +181,7 @@ class Hierachi_RNN(object):
         norm_matrix = T.dot(norm1.reshape((-1,1)),norm2.reshape((1,-1)))
         return batch_dot/norm_matrix
 
-      def discrim_cost_generator(self):
+    def discrim_cost_generator(self):
         if self.discrim_regularization_level == 0:
             self.all_discrim_cost = self.discrim_cost
         elif self.discrim_regularization_level == 1:
