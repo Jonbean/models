@@ -29,6 +29,7 @@ class Hierachi_RNN(object):
                  loss_type = 'hinge',
                  dnn_discriminator_setting = '512x1',
                  discrim_regularization_level = 0,
+                 epochs = 100,
                  regularization_index = '1E-4'):
         # Initialize Theano Symbolic variable attributes
         self.story_input_variable = None
@@ -55,9 +56,8 @@ class Hierachi_RNN(object):
 
         # Initialize data loading attributes
         self.wemb = None
-        self.val_train_ls_path = '../../data/pickles/val_train_ls.pkl'
-        self.val_test_ls_path = '../../data/pickles/val_test_ls.pkl'
-        self.val_set_path = '../../data/pickles/val_index_corpus.pkl'
+        self.train_set_path = '../../data/pickles/val_train_set_index_corpus.pkl'
+        self.val_set_path = '../../data/pickles/val_test_set_index_corpus.pkl'
         self.test_set_path = '../../data/pickles/test_index_corpus.pkl' 
         self.wemb_matrix_path = '../../data/pickles/index_wemb_matrix.pkl'
 
@@ -102,7 +102,7 @@ class Hierachi_RNN(object):
         self.loss_type = loss_type
         self.score_func = score_func
         self.discrim_regularization_level = int(discrim_regularization_level)
-
+        self.epochs = int(epochs)
         self.discrim_regularization_dict = {0:"no regularization on discriminator",
                                             1:"L2 on discriminator DNN",
                                             2:"L2 on discriminator word level RNN + DNN",
@@ -243,10 +243,10 @@ class Hierachi_RNN(object):
         else:
             merge_ls1 = [tensor.dimshuffle(0,'x',1) for tensor in self.train_encodinglayer_vecs[:5]]
             merge_ls2 = [tensor.dimshuffle(0,'x',1) for tensor in self.train_encodinglayer_vecs[:4]] + \
-                        [self.train_encodinglayer_vecs[5]]
+                        [self.train_encodinglayer_vecs[5].dimshuffle(0,'x',1)]
 
-            encode_merge1 = T.concatenate(merge_ls1)
-            encode_merge2 = T.concatenate(merge_ls2)
+            encode_merge1 = T.concatenate(merge_ls1, axis = 1)
+            encode_merge2 = T.concatenate(merge_ls2, axis = 1)
             self.story1_rep = lasagne.layers.get_output(self.reasoner.output, {self.reasoner.l_in: encode_merge1})
             self.story2_rep = lasagne.layers.get_output(self.reasoner.output, {self.reasoner.l_in: encode_merge2})
 
@@ -270,7 +270,9 @@ class Hierachi_RNN(object):
             target1 = 2.0 * answer - 1.0
             target2 = - 2.0 * answer + 1.0
             cost = target1.dimshuffle(0,'x') * self.score1 + target2.dimshuffle(0,'x') * self.score2 + self.delta
-            self.discrim_cost = lasagne.objectives.aggregate(cost, mode = 'mean')
+            
+            self.cost = T.gt(cost, 0.0) * cost
+            self.discrim_cost = lasagne.objectives.aggregate(self.cost, mode = 'mean')
 
         else:
             cost1 = lasagne.objectives.categorical_crossentropy(prob1, 1-anwer)
@@ -293,33 +295,28 @@ class Hierachi_RNN(object):
 
         self.prediction = theano.function(self.inputs_variables + self.inputs_masks, [self.score1, self.score2])
         # pydotprint(self.train_func, './computational_graph.png')
-    def split_val(self, index_list):
-        def retrieve_data(data_set):
-            return [data_set[i] for i in index_list]
-
-        return retrieve_data(self.val_story), retrieve_data(self.val_ending1), retrieve_data(self.val_ending2), retrieve_data(self.val_answer)
 
     def load_data(self):
         # train_set = pickle.load(open(self.train_set_path))
         # self.train_story = train_set[0]
         # self.train_ending = train_set[1]
 
+        train_set = pickle.load(open(self.train_set_path,'r'))
+
+        self.val_train_story = train_set[0]
+        self.val_train_end1 = train_set[1]
+        self.val_train_end2 = train_set[2]
+        self.val_train_answer = train_set[3]
+
+        self.train_n = len(self.val_train_answer)
+        
         val_set = pickle.load(open(self.val_set_path,'r'))
+        self.val_test_story = val_set[0]
+        self.val_test_end1 = val_set[1]
+        self.val_test_end2 = val_set[2]
+        self.val_test_answer = val_set[3]
 
-        self.val_story = val_set[0]
-        self.val_ending1 = val_set[1]
-        self.val_ending2 = val_set[2]
-        self.val_answer = val_set[3]
-
-        self.val_len = len(self.val_answer)
-
-        self.val_train_ls = pickle.load(open(self.val_train_ls_path, 'r'))
-        self.val_test_ls = pickle.load(open(self.val_test_ls_path, 'r'))
-        self.val_train_n = len(self.val_train_ls)
-        self.val_test_n = len(self.val_test_ls)
-
-        self.val_train_story, self.val_train_end1, self.val_train_end2, self.val_train_answer = self.split_val(self.val_train_ls)
-        self.val_test_story, self.val_test_end1, self.val_test_end2, self.val_test_answer = self.split_val(self.val_test_ls)
+        self.val_n = len(self.val_test_answer)
 
         test_set = pickle.load(open(self.test_set_path))
         self.test_story = test_set[0]
@@ -340,7 +337,7 @@ class Hierachi_RNN(object):
 
         minibatch_n = 50
         if val_or_test == 'val':
-            n_eva = self.val_test_n
+            n_eva = self.val_n
             eva_story = self.val_test_story
             eva_ending1 = self.val_test_end1
             eva_ending2 = self.val_test_end2
@@ -462,9 +459,9 @@ class Hierachi_RNN(object):
             print "This model has ", accuracy * 100, "%  accuracy on test set" 
 
     def begin_train(self):
-        N_EPOCHS = 100
+        N_EPOCHS = self.epochs
         N_BATCH = self.batchsize
-        N_TRAIN_INS = self.val_train_n
+        N_TRAIN_INS = self.train_n
         best_val_accuracy = 0
         best_test_accuracy = 0
         test_threshold = 10000/N_BATCH
@@ -541,10 +538,10 @@ class Hierachi_RNN(object):
 
 
                 if self.loss_type == "hinge":
-                    total_correct_count += np.count_nonzero((score1.flatten() - score2.flatten()).clip(0.0))
+                    total_correct_count += N_BATCH - abs(np.argmax(np.concatenate([score1, score2], axis = 1), axis = 1) - answer).sum()
                 else:
-                    correct1 = np.argmax(score1, axis = 1).sum()
-                    correct2 = (1-np.argmax(score2, axis = 1)).sum()
+                    correct1 = abs(np.argmax(score1, axis = 1) - answer).sum()
+                    correct2 = abs(np.argmax(score2, axis = 1) - 1 + answer).sum()
                     total_correct_count += (correct1 + correct2)
 
                 total_cost += cost

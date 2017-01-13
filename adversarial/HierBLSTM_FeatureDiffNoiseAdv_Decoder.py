@@ -94,6 +94,7 @@ class Hierachi_RNN(object):
         self.delta = float(delta)
        
         self.wemb_trainable = bool(int(wemb_trainable))
+    
         self.discrim_lr = float(discrim_lr)
         self.generat_lr = float(generat_lr)
 
@@ -179,16 +180,16 @@ class Hierachi_RNN(object):
             encode_merge = T.concatenate(merge_ls, axis = 1)
 
             self.plot_rep = lasagne.layers.get_output(self.reasoner.output,
-                                                {self.reaonser.l_in:self.merge_ls})
+                                                {self.reasoner.l_in:encode_merge})
 
-            self.ending1_rep = lasagne.layers.get_output(self.reaonser.output,
-                                                  {self.reasoner.l_in:self.train_encodinglayer_vecs[4]})
+            self.ending1_rep = lasagne.layers.get_output(self.reasoner.output,
+                                                  {self.reasoner.l_in:self.train_encodinglayer_vecs[4].dimshuffle(0,'x', 1)})
 
-            self.ending2_rep = lasagne.layers.get_output(self.reaonser.output,
-                                                  {self.reasoner.l_in:self.train_encodinglayer_vecs[5]})
+            self.ending2_rep = lasagne.layers.get_output(self.reasoner.output,
+                                                  {self.reasoner.l_in:self.train_encodinglayer_vecs[5].dimshuffle(0,'x', 1)})
 
             self.fake_end_rep = lasagne.layers.get_output(self.reasoner.output,
-                                                  {self.reasoner.l_in:self.fake_endings})
+                                                  {self.reasoner.l_in:self.fake_endings.dimshuffle(0,'x', 1)})
             self.real_mean, self.real_covariance = self.mean_covariance(self.ending1_rep)
             self.fake_mean, self.fake_covariance = self.mean_covariance(self.fake_end_rep)
 
@@ -330,8 +331,7 @@ class Hierachi_RNN(object):
         
 
         self.DNN_generator = DNN.DNN(INPUTS_SIZE = self.dnn_generator_settings[0], 
-                                     LAYER_UNITS = self.dnn_generator_settings[1:], 
-                                     final_nonlin = self.nonlin_func)
+                                     LAYER_UNITS = self.dnn_generator_settings[1:])
 
         srng = RandomStreams(seed = 31415)
         self.random_input = None
@@ -358,10 +358,11 @@ class Hierachi_RNN(object):
         self.decoding_cost_ls = []
         for i in range(self.story_nsent+1):
             prediction = self.decoding_layer(self.train_encodinglayer_vecs[i], self.inputs_masks[i])
-            prediction_reshape = prediction.reshape((-1, self.wemb_size))
-            self.decoding_cost_ls.append(lasagne.objectives.categorical_crossentropy(prediction_reshape, T.flatten(self.inputs_variables[i]) - 1))
+            prediction_reshape = prediction.reshape((-1, self.decoder_units[-1]))
+            clipping_words = T.flatten(T.clip(self.inputs_variables[i], 0, self.decoder_units[-1]-1))
+            self.decoding_cost_ls.append(lasagne.objectives.categorical_crossentropy(prediction_reshape, clipping_words))
 
-        self.decoding_cost = T.sum(T.concatenate(self.decoding_cost_ls))
+        self.decoding_cost = (T.concatenate(self.decoding_cost_ls)).sum()
 
         '''================PART VI================'''
         '''                SCOREING                '''
@@ -393,7 +394,7 @@ class Hierachi_RNN(object):
 
 
                 real_pair1 = T.concatenate([self.plot_rep, self.ending1_rep], axis = 1)
-                real_pair2 = T.concatenate(self.plot_rep, self.ending2_rep, axis = 1)
+                real_pair2 = T.concatenate([self.plot_rep, self.ending2_rep], axis = 1)
                 fake_pair = T.concatenate([self.plot_rep, self.fake_endings], axis = 1)
 
                 self.score1 = lasagne.layers.get_output(self.DNN_score_func.output, 
@@ -433,8 +434,8 @@ class Hierachi_RNN(object):
         
             self.discrim_score = - self.score1 + self.delta + self.score2
             # self.batch_max_score = - self.score1 + self.delta + self.socre4 
-            real_cov_inverse = T.nlinalg.MatrixInverse(self.real_covariance)
-            fake_cov_inverse = T.nlinalg.MatrixInverse(self.fake_covariance)
+            real_cov_inverse = T.nlinalg.matrix_inverse(self.real_covariance)
+            fake_cov_inverse = T.nlinalg.matrix_inverse(self.fake_covariance)
 
             self.discrim_score_vec = T.clip(self.discrim_score, 0.0, float('inf'))
             # self.batch_max_score_vec = T.clip(self.batch_max_score, 0.0, float('inf'))
@@ -521,7 +522,7 @@ class Hierachi_RNN(object):
         ''''=====Wemb====='''
         self.wemb = theano.shared(pickle.load(open(self.wemb_matrix_path))).astype(theano.config.floatX)
         self.wemb_size = self.wemb.get_value().shape[0]
-        self.decoder_units.append(self.wemb_size)
+
         '''=====Peeping Preparation====='''
         self.peeked_ends_ls = np.random.randint(self.n_train, size=(5,))
         self.ends_pool_ls = np.random.choice(range(self.n_train), 2000, replace = False)

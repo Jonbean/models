@@ -335,7 +335,6 @@ class Hierachi_RNN(object):
                                          updates = all_discrim_updates)
 
 
-        self.monitor_func = theano.function([], self.fake_endings)
 
         self.prediction = theano.function(self.inputs_variables + self.inputs_masks,
                                          [self.score1, self.score3]) 
@@ -431,7 +430,7 @@ class Hierachi_RNN(object):
                                              ending2_mask)
 
             # Answer denotes the index of the anwer
-            if self.loss_type == "hinge":
+            if self.dnn_discriminator_setting[-1] == 1 or (self.sent_rnn_units[-1] == 1 and self.score_func == 'DNN'):
                 prediction = np.argmax(np.concatenate((score1, score2), axis=1), axis=1)
                 correct_vec = prediction - eva_answer[i*minibatch_n:(i+1)*minibatch_n]
                 correct += minibatch_n - (abs(correct_vec)).sum()

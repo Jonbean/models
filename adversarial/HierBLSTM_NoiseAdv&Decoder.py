@@ -172,16 +172,16 @@ class Hierachi_RNN(object):
             encode_merge = T.concatenate(merge_ls, axis = 1)
 
             self.plot_rep = lasagne.layers.get_output(self.reasoner.output,
-                                                {self.reaonser.l_in:self.merge_ls})
+                                                {self.reasoner.l_in:encode_merge})
 
-            self.ending1_rep = lasagne.layers.get_output(self.reaonser.output,
-                                                  {self.reasoner.l_in:self.train_encodinglayer_vecs[4]})
+            self.ending1_rep = lasagne.layers.get_output(self.reasoner.output,
+                                                  {self.reasoner.l_in:self.train_encodinglayer_vecs[4].dimshuffle(0,'x',1)})
 
-            self.ending2_rep = lasagne.layers.get_output(self.reaonser.output,
-                                                  {self.reasoner.l_in:self.train_encodinglayer_vecs[5]})
+            self.ending2_rep = lasagne.layers.get_output(self.reasoner.output,
+                                                  {self.reasoner.l_in:self.train_encodinglayer_vecs[5].dimshuffle(0,'x',1)})
 
             self.fake_end_rep = lasagne.layers.get_output(self.reasoner.output,
-                                                  {self.reasoner.l_in:self.fake_endings})
+                                                  {self.reasoner.l_in:self.fake_endings.dimshuffle(0,'x',1)})
 
         else:
             merge_ls1 = [tensor.dimshuffle(0,'x',1) for tensor in self.train_encodinglayer_vecs[:4] + \
@@ -320,8 +320,7 @@ class Hierachi_RNN(object):
         
 
         self.DNN_generator = DNN.DNN(INPUTS_SIZE = self.dnn_generator_settings[0], 
-                                     LAYER_UNITS = self.dnn_generator_settings[1:], 
-                                     final_nonlin = self.nonlin_func)
+                                     LAYER_UNITS = self.dnn_generator_settings[1:])
 
         srng = RandomStreams(seed = 31415)
         self.random_input = None
