@@ -22,7 +22,6 @@ class Hierachi_RNN(object):
                  sent_rnn_setting,
                  batchsize, 
                  dnn_generator_setting,
-                 decoder_units,
                  reasoning_type = 'concatenate',
                  wemb_trainable = 1,
                  discrim_lr = 0.001,
@@ -36,7 +35,8 @@ class Hierachi_RNN(object):
                  dnn_discriminator_setting = '512x1',
                  discrim_regularization_level = 0,
                  generat_regularization_level = 0,
-                 regularization_index = '1E-4'):
+                 regularization_index = '1E-4',
+                 gouda_test = 'local'):
         # Initialize Theano Symbolic variable attributes
         self.story_input_variable = None
         self.story_mask = None
@@ -115,6 +115,10 @@ class Hierachi_RNN(object):
         self.discrim_regularization_level = int(discrim_regularization_level)
         self.generat_regularization_level = int(generat_regularization_level)
         self.random_input_type = random_input_type
+        if gouda_test == "local":
+            self.mean_std_save_path = '../../data/pickles/featurediff_adv_mean_std_record.pkl'
+        else:
+            self.mean_std_save_path = '/share/data/speech/Data/joncai/adv_monitor/'+gouda_test+'.pkl'
 
         self.discrim_regularization_dict = {0:"no regularization on discriminator",
                                             1:"L2 on discriminator DNN",
@@ -803,7 +807,7 @@ class Hierachi_RNN(object):
              #       print "Highest Score Ending in this batch: " + highest_score_end 
              #       print ""
                     pickle.dump([fake_endings_mean, fake_endings_std, real_endings_mean, real_endings_std],
-                                open('../../data/pickles/featurediff_adv_mean_std_record.pkl', 'w'))
+                                open(self.mean_std_save_path, 'w'))
 
 
 
