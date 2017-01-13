@@ -116,7 +116,7 @@ class Hierachi_RNN(object):
         self.generat_regularization_level = int(generat_regularization_level)
         self.random_input_type = random_input_type
         if gouda_test == "local":
-            self.mean_std_save_path = '../../data/pickles/featurediff_adv_mean_std_record.pkl'
+            self.mean_std_save_path = '../../data/pickles/condition_featurediff_adv_mean_std_record.pkl'
         else:
             self.mean_std_save_path = '/share/data/speech/Data/joncai/adv_monitor/'+gouda_test+'.pkl'
 
