@@ -23,13 +23,13 @@ class Hierachi_RNN(object):
                  batchsize, 
                  dnn_generator_setting,
                  reasoning_type = 'concatenate',
-                 wemb_trainable = 1,
+                 wemb_trainable = 0,
                  discrim_lr = 0.001,
                  generat_lr = 0.001,
                  delta = 1.0,
-                 mode = 'sequence',
+                 mode = 'last',
                  nonlin_func = 'default',
-                 score_func = 'cos',
+                 score_func = 'DNN',
                  loss_type = 'hinge', 
                  random_input_type = 'normal',
                  dnn_discriminator_setting = '512x1',
@@ -107,7 +107,7 @@ class Hierachi_RNN(object):
         self.bias = 0.001
         self.dnn_generator_settings = map(int, dnn_generator_setting.split('x'))
         self.dnn_discriminator_setting = map(int, dnn_discriminator_setting.split('x'))
-        self.decoder_units = map(int, decoder_units.split('x'))
+        # self.decoder_units = map(int, decoder_units.split('x'))
         self.reasoning_type = reasoning_type
 
         self.loss_type = loss_type
@@ -443,10 +443,7 @@ class Hierachi_RNN(object):
             # self.batch_max_score_vec = T.clip(self.batch_max_score, 0.0, float('inf'))
 
             self.discrim_cost = lasagne.objectives.aggregate(self.discrim_score_vec, mode = 'mean') 
-            self.generat_cost = T.nlinalg.trace(T.dot(real_cov_inverse, self.fake_covariance) + T.dot(fake_cov_inverse, self.real_covariance)) + \
-                                T.dot(T.dot((self.fake_mean - self.real_mean).T, (fake_cov_inverse + real_cov_inverse)), (self.fake_mean - self.real_mean))
 
-            self.all_discrim_params = self.encoder.all_params + self.reasoner.all_params 
 
         else:
             prob1 = lasagne.nonlinearities.softmax(self.score1)
@@ -455,15 +452,16 @@ class Hierachi_RNN(object):
             cost1 = lasagne.objectives.categorical_crossentropy(prob1, T.ones((self.batchsize, )).astype('int64'))
             cost2 = lasagne.objectives.categorical_crossentropy(prob2, T.zeros((self.batchsize, )).astype('int64'))
 
-            self.discrim_cost = lasagne.objectives.aggregate(cost1 + cost2, mode = 'mean')
+
+        if self.batchsize >= 300:
             self.generat_cost = T.nlinalg.trace(T.dot(real_cov_inverse, self.fake_covariance) + T.dot(fake_cov_inverse, self.real_covariance)) + \
                                 T.dot(T.dot((self.fake_mean - self.real_mean).T, (fake_cov_inverse + real_cov_inverse)), (self.fake_mean - self.real_mean))
-           
+        else:
+            self.generat_cost = T.sqr(self.fake_mean - self.real_mean)
 
-            self.all_discrim_params = self.encoder.all_params + self.reasoner.all_params
-            if self.score_func == "DNN":
-                self.all_discrim_params += self.DNN_score_func.all_params
-
+        self.all_discrim_params = self.encoder.all_params + self.reasoner.all_params 
+        if self.score_func == "DNN":
+            self.all_discrim_params += self.DNN_score_func.all_params
         # testing decoding result of fake endings
 #        fake_ending_interpretation = self.decoding_layer(self.fake_endings, T.ones((self.batchsize, 20)))
         # Retrieve all parameters from the network
@@ -481,15 +479,14 @@ class Hierachi_RNN(object):
         if self.loss_type == 'hinge':        
             self.train_func = theano.function(self.inputs_variables[:5] + self.inputs_masks[:5], 
                                              [self.discrim_cost, self.generat_cost, 
-                                             self.score1, self.score2, self.train_encodinglayer_vecs[4]],
+                                             self.score1, self.score2, self.train_encodinglayer_vecs[4],self.fake_endings],],
                                              updates = all_discrim_updates)
         else:
             self.train_func = theano.function(self.inputs_variables[:5] + self.inputs_masks[:5], 
                                              [self.discrim_cost, self.generat_cost, self.score1, 
-                                              self.score2, self.train_encodinglayer_vecs[4]],
+                                              self.score2, self.train_encodinglayer_vecs[4],self.fake_endings],],
                                              updates = all_discrim_updates)
 
-        self.monitor_func = theano.function([], [self.fake_endings])
 
         self.prediction = theano.function(self.inputs_variables + self.inputs_masks,
                                          [self.score1, self.score3]) 
@@ -524,7 +521,7 @@ class Hierachi_RNN(object):
         ''''=====Wemb====='''
         self.wemb = theano.shared(pickle.load(open(self.wemb_matrix_path))).astype(theano.config.floatX)
         self.wemb_size = self.wemb.get_value().shape[0]
-        self.decoder_units.append(self.wemb_size)
+        # self.decoder_units.append(self.wemb_size)
         '''=====Peeping Preparation====='''
         self.peeked_ends_ls = np.random.randint(self.n_train, size=(5,))
         self.ends_pool_ls = np.random.choice(range(self.n_train), 2000, replace = False)
@@ -738,10 +735,11 @@ class Hierachi_RNN(object):
                 score1 = result_list[2]
                 score2 = result_list[3]
                 ending_rep = result_list[4]
+                fake_rep = result_list[5]
 #                decoding_cost = result_list[5]
 
                 if batch % 1000 == 0 and batch != 0:
-                    fake_ending = self.monitor_func()
+                    fake_ending = fake_rep
                     fake_ending_mean = fake_ending.sum(axis = 0)/self.batchsize
                     fake_ending_std = (abs(fake_ending - fake_ending_mean)).sum()/(self.batchsize * self.sent_rnn_units)
                     fake_endings_mean.append(fake_ending_mean)
