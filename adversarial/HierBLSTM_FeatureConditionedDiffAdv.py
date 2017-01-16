@@ -31,7 +31,6 @@ class Hierachi_RNN(object):
                  nonlin_func = 'default',
                  score_func = 'DNN',
                  loss_type = 'hinge', 
-                 random_input_type = 'normal',
                  dnn_discriminator_setting = '512x1',
                  discrim_regularization_level = 0,
                  generat_regularization_level = 0,
@@ -114,7 +113,7 @@ class Hierachi_RNN(object):
         self.score_func = score_func
         self.discrim_regularization_level = int(discrim_regularization_level)
         self.generat_regularization_level = int(generat_regularization_level)
-        self.random_input_type = random_input_type
+        # self.random_input_type = random_input_type
         if gouda_test == "local":
             self.mean_std_save_path = '../../data/pickles/condition_featurediff_adv_mean_std_record.pkl'
         else:
