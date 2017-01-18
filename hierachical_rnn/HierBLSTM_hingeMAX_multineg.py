@@ -60,7 +60,7 @@ class Hierachi_RNN(object):
         self.val_set_path = '../../data/pickles/val_index_corpus.pkl'
         self.test_set_path = '../../data/pickles/test_index_corpus.pkl' 
         self.wemb_matrix_path = '../../data/pickles/index_wemb_matrix.pkl'
-        self.index2word_dict_path = '../../data/pickles/ROC_train_index_dict.pkl'
+        self.index2word_dict_path = '../../data/pickles/index2word_dict.pkl'
 
         self.word_rnn_units = map(int, word_rnn_setting.split('x')) 
         self.sent_rnn_units = map(int, sent_rnn_setting.split('x'))
