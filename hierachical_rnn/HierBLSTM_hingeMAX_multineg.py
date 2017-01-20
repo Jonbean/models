@@ -171,7 +171,7 @@ class Hierachi_RNN(object):
         
         batch_concate_input = T.concatenate([batch_rep1_reshape, batch_rep2_reshape], axis = 1)        
         batch_score = lasagne.layers.get_output(self.DNN_score_func.output, 
-                                               {self.DNN_score_func.l_in: batch_concate_input})
+                                               {self.DNN_score_func.l_in: batch_concate_input}, deterministic = False)
         return batch_score.reshape((self.batchsize, self.batchsize))
 
     def matrix_cos(self, batch_rep1, batch_rep2):
@@ -289,10 +289,14 @@ class Hierachi_RNN(object):
             real_pair2 = T.concatenate([self.plot_rep, self.end2_rep], axis = 1)
 
             self.score1 = lasagne.layers.get_output(self.DNN_score_func.output, 
-                                                   {self.DNN_score_func.l_in: real_pair1})
+                                                   {self.DNN_score_func.l_in: real_pair1}, deterministic = False)
+ 
+            self.score11 = lasagne.layers.get_output(self.DNN_score_func.output, 
+                                                   {self.DNN_score_func.l_in: real_pair1}, deterministic = True)
             
+           
             self.score3 = lasagne.layers.get_output(self.DNN_score_func.output, 
-                                                   {self.DNN_score_func.l_in: real_pair2})
+                                                   {self.DNN_score_func.l_in: real_pair2}, deterministic = True)
             if self.dnn_discriminator_setting[-1] == 1:
                 self.score4_matrix = self.matrix_DNN(self.plot_rep, self.end1_rep) 
 
@@ -317,7 +321,7 @@ class Hierachi_RNN(object):
 
         self.minibatch_max_score()
 
-        self.batch_max_score = - self.negative_num * self.score1 + self.delta + T.sum(self.score_descend, axis = 1)
+        self.batch_max_score = - self.negative_num * self.score1.flatten() + self.delta + T.sum(self.score_descend, axis = 1)
 
         self.batch_max_score_vec = T.gt(self.batch_max_score, 0.0) * self.batch_max_score
 
@@ -345,7 +349,7 @@ class Hierachi_RNN(object):
 
 
         self.prediction = theano.function(self.inputs_variables + self.inputs_masks,
-                                         [self.score1, self.score3]) 
+                                         [self.score11, self.score3]) 
         # pydotprint(self.train_func, './computational_graph.png')
 
     def load_data(self):
@@ -550,7 +554,7 @@ class Hierachi_RNN(object):
             start_time = time.time()
 
             total_disc_cost = 0.0
-            total_gene_cost = 0.0
+            # total_gene_cost = 0.0
             # total_adv_correct_count = 0.0
             total_hinge_prob_accumu = 0.0
             total_penalty_cost = 0.0
@@ -599,7 +603,7 @@ class Hierachi_RNN(object):
                     print "max score index check:"
                     print max_score_index
                     print "descend scores"
-                    print descend_score0
+                    print descend_score
                     print "test on val set..."
                     val_result = self.eva_func('val')
                     print "accuracy is: ", val_result*100, "%"
@@ -612,7 +616,6 @@ class Hierachi_RNN(object):
                         if test_accuracy > best_test_accuracy:
                             best_test_accuracy = test_accuracy
                     print "discriminator cost per instances:", total_disc_cost/(batch+1)
-                    print "generator cost per instances:", total_gene_cost/(batch+1)
 
                     '''===================================================='''
                     '''randomly print out a story and it's higest score end'''

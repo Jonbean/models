@@ -17,6 +17,7 @@ class DNN(object):
 
         self.l_in = lasagne.layers.InputLayer(shape=(None, self.inputs_size))
         self.hidden_layers.append(self.l_in)
+        self.hidden_layers.append(lasagne.layers.DropoutLayer(self.hidden_layers[-1], p = 0.5))
         for i in range(len(self.layer_units)-1):
             self.hidden_layers.append(lasagne.layers.DenseLayer(self.hidden_layers[i], 
                                         num_units=self.layer_units[i],
