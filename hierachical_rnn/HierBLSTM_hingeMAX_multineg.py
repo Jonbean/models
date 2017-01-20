@@ -92,7 +92,12 @@ class Hierachi_RNN(object):
 
         self.mode = mode
         self.GRAD_CLIP = 10.0
-        self.nonlin_func = lasagne.nonlinearities.tanh
+        if nonlin_func == 'default':
+            self.nonlin_func = lasagne.nonlinearities.tanh
+        elif nonlin_func == 'relu':
+            self.nonlin_func = lasagne.nonlinearities.rectify
+        else:
+            self.nonlin_func = lasagne.nonlinearities.linear
 
         self.dnn_discriminator_setting = map(int, dnn_discriminator_setting.split('x'))
         self.score_func = score_func
@@ -321,9 +326,9 @@ class Hierachi_RNN(object):
 
         self.minibatch_max_score()
 
-        self.batch_max_score = - self.negative_num * self.score1.flatten() + self.delta + T.sum(self.score_descend, axis = 1)
+        self.batch_max_score = T.clip(self.score_descend - self.score1 + self.delta, 0.0, float('inf'))
 
-        self.batch_max_score_vec = T.gt(self.batch_max_score, 0.0) * self.batch_max_score
+        self.batch_max_score_vec = T.sum(T.gt(self.batch_max_score, 0.0) * self.batch_max_score, axis = 1)
 
         self.discrim_cost = lasagne.objectives.aggregate(self.batch_max_score_vec, mode = 'mean') 
 
