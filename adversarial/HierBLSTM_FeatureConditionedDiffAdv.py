@@ -478,12 +478,12 @@ class Hierachi_RNN(object):
         if self.loss_type == 'hinge':        
             self.train_func = theano.function(self.inputs_variables[:5] + self.inputs_masks[:5], 
                                              [self.discrim_cost, self.generat_cost, 
-                                             self.score1, self.score2, self.train_encodinglayer_vecs[4],self.fake_endings],],
+                                             self.score1, self.score2, self.train_encodinglayer_vecs[4],self.fake_endings],
                                              updates = all_discrim_updates)
         else:
             self.train_func = theano.function(self.inputs_variables[:5] + self.inputs_masks[:5], 
                                              [self.discrim_cost, self.generat_cost, self.score1, 
-                                              self.score2, self.train_encodinglayer_vecs[4],self.fake_endings],],
+                                              self.score2, self.train_encodinglayer_vecs[4],self.fake_endings],
                                              updates = all_discrim_updates)
 
 
