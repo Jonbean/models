@@ -36,7 +36,7 @@ for j in range(len(discrim_dnn)):
             f.write('export OMP_NUM_THREADS=1\n')
             f.write('export OPENBLAS_NUM_THREADS=1\n')
             f.write('echo "Start - `date`"\n')
-            f.write('/home-nfs/jontsai/anaconda/bin/python HierBLSTM_FeatureDiffNoiseAdv.py \\\n')
+            f.write('/home-nfs/jontsai/anaconda/bin/python HierBLSTM_FeatureDiffConditioned_Score.py \\\n')
             f.write('$SETTING1 $SETTING2 $SETTING3 $SETTING4 $SETTING5 $SETTING6 $SETTING7 $SETTING8 $SETTING9 \
                      $SETTING10 $SETTING11 $SETTING12 $SETTING13 $SETTING14 $SETTING15 $SETTING16 $SETTING17\n')
             f.write('echo "End - `date`"\n')
