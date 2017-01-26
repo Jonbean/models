@@ -201,3 +201,72 @@ def fake_data(max_index, batch_number, max_time_step, min_time_step):
         mask[batch] = np.concatenate((np.ones(length), np.zeros(max_time_step - length)))
 
     return (fake_data.astype('int32'), mask)
+
+def number_with_units(word):
+    index = 0
+    if len(word) <= 1:
+        return -1
+    for c in word:
+        if c.isdigit() or c == ',':
+            continue
+        else:
+            index = word.index(c)
+            break
+    for c in word[index:]:
+        if c.isalpha():
+            continue
+        else:
+            return -1
+    return index
+
+#recursive function to split surfix punctuation and possession problem
+def split_word(word):
+    bad_end = ("#",'"','?','!','+','.',',',"'", '(',')',':','/',';','$','-','`','*','\\','%','&',']')
+    bad_end_double = ('oz','lb','am','pm','th','ft')
+    bad_end_triple = ('lbs','mph')
+    bad_middle = ("-",",",".",":",'/',"*","\\",'&',"'",')','(','!')
+    non_char = '\xef\xbf\xbd'
+    single_abriev = ("'s","'d","'m")
+    double_abriev = ("'ve", "'ll", "'re","n't")
+    
+    if word.lower() in glove_300_dict:
+        return [word]
+    elif word.startswith(bad_end):
+        return [word[0]] + split_word(word[1:])
+    elif word.endswith(bad_end):
+        return split_word(word[:-1]) + [word[-1]]
+    elif word.endswith(single_abriev+bad_end_double):
+        return split_word(word[:-2]) + [word[-2:]]
+    elif word.endswith(double_abriev+bad_end_triple):
+        return split_word(word[:-3]) + [word[-3:]]
+    elif any((c in bad_middle) for c in word.lower()[1:-1]):
+        for ch in bad_middle:
+            if ch in word.lower()[1:-1]:
+                char_index = word.index(ch)
+                return split_word(word[:char_index+1]) + split_word(word[char_index+1:])
+    elif non_char in word.lower():
+        char_index = word.index(non_char)
+        return split_word(word.lower()[:char_index])+["?"]+split_word(word.lower()[char_index])
+    elif number_with_units(word.lower()) != -1:
+        index = number_with_units(word.lower())
+        return [word[:index]] + [word[index:]]
+    else:
+        return [word]
+    
+#convert word list into tokens
+def split_sent(word_list):
+    new_word_ls = []
+    for word in word_list:
+        new_word_ls += split_word(word)
+    return new_word_ls
+
+def tokenization(story_list):
+    tokenized_set = []
+    for story in story_list:
+        story_list = []
+        for sent in story:
+            word_list = sent.split(' ')
+            new_word_list = split_sent(word_list)
+            story_list.append(new_word_list)
+        tokenized_set.append(story_list)
+    return tokenized_set
