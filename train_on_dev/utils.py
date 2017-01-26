@@ -270,3 +270,16 @@ def tokenization(story_list):
             story_list.append(new_word_list)
         tokenized_set.append(story_list)
     return tokenized_set
+
+
+def sent2index(sent):
+    sent_index_ls = [word2index_dict['<s>']]
+    for word in sent:
+        if word.lower() in word2index_dict:
+            sent_index_ls.append(word2index_dict[word.lower()])
+        elif word.lower().isdigit():
+            sent_index_ls.append(word2index_dict['UNKNOWN_NUM'])
+        else: 
+            sent_index_ls.append(word2index_dict['UUNKNOWNN'])
+    sent_index_ls.append(word2index_dict['</s>'])
+    return sent_index_ls
