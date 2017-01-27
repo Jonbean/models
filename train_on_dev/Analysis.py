@@ -16,6 +16,7 @@ import sys
 
 class Hierachi_RNN(object):
     def __init__(self, 
+                 best_val_model_save_path,
                  word_rnn_setting, 
                  sent_rnn_setting,
                  batchsize, 
@@ -61,6 +62,9 @@ class Hierachi_RNN(object):
         self.val_set_path = '../../data/pickles/val_test_set_index_corpus.pkl'
         self.test_set_path = '../../data/pickles/test_index_corpus.pkl' 
         self.wemb_matrix_path = '../../data/pickles/index_wemb_matrix.pkl'
+        self.index2word_dict_path = '../../data/pickles/index2word_dict.pkl'
+        self.word2index_dict_path = '../../data/pickles/word2index_dict.pkl'
+        self.best_val_model_save_path = best_val_model_save_path
         # self.best_val_model_save_path = './attention_best_model_'+mode+story_rep_type+score_func+loss_type+dnn_discriminator_setting+str(discrim_regularization_level)+str(dropout_rate)+'.pkl' 
         self.word_rnn_units = map(int, word_rnn_setting.split('x')) 
         self.sent_rnn_units = map(int, sent_rnn_setting.split('x'))
@@ -347,7 +351,8 @@ class Hierachi_RNN(object):
         # self.train_story = train_set[0]
         # self.train_ending = train_set[1]
 
-        train_set = pickle.load(open(self.train_set_path,'r'))
+        with open(self.train_set_path, 'r') as f:
+            train_set = pickle.load(f)
 
         self.val_train_story = train_set[0]
         self.val_train_end1 = train_set[1]
@@ -356,22 +361,29 @@ class Hierachi_RNN(object):
 
         self.train_n = len(self.val_train_answer)
         
-        val_set = pickle.load(open(self.val_set_path,'r'))
+        with open(self.val_set_path, 'r') as f:
+            val_set = pickle.load(f)
+
         self.val_test_story = val_set[0]
         self.val_test_end1 = val_set[1]
         self.val_test_end2 = val_set[2]
         self.val_test_answer = val_set[3]
 
         self.val_n = len(self.val_test_answer)
-
-        test_set = pickle.load(open(self.test_set_path))
+        with open(self.test_set_path, 'r') as f:
+            test_set = pickle.load(f)
         self.test_story = test_set[0]
         self.test_ending1 = test_set[1]
         self.test_ending2 = test_set[2]
         self.test_answer = test_set[3]
         self.n_test = len(self.test_answer)
-
-        self.wemb = theano.shared(pickle.load(open(self.wemb_matrix_path))).astype(theano.config.floatX)
+        
+        with open(self.wemb_matrix_path, 'r') as f:
+            self.wemb = theano.shared(pickle.load(f)).astype(theano.config.floatX)
+        with open(self.index2word_dict_path, 'r') as f:
+            self.index2word_dict = pickle.load(f)
+        with open(self.word2index_dict_path, 'r') as f:
+            self.word2index_dict = pickle.load(f)
 
     def eva_func(self, val_or_test):
         correct = 0.
@@ -487,12 +499,11 @@ class Hierachi_RNN(object):
         pickle.dump((encoder_params_value, reasoner_params_value, classif_params_value, attention_matrix, accuracy), 
                     open(self.best_val_model_save_path, 'wb'))
 
-    def reload_model(self, model_save_path):
-        self.best_val_model_save_path = model_save_path
+    def reload_model(self):
         encoder_params, reasoner_params, classif_params, attention_matrix, accuracy = pickle.load(open(self.best_val_model_save_path))
         lasagne.layers.set_all_param_values(self.encoder.output, encoder_params)
         lasagne.layers.set_all_param_values(self.reasoner.output, reasoner_params)
-        lasagne.layers.set_all_param_values(self.classify_layer.output, classif_params)
+        lasagne.layers.set_all_param_values(self.DNN_score_func.output, classif_params)
         self.bilinear_attention_matrix.set_value(attention_matrix)
 
         print "This model has ", accuracy * 100, "%  accuracy on valid set" 
@@ -652,34 +663,54 @@ class Hierachi_RNN(object):
         self.print_func(indices_ls, score1, score2)
             
     def mask_demo(self, index, story_mask_indices, end1_mask_indices, end2_mask_indices):
-        indices_ls = [int(index)]
+        demo_story = None
+        end1 = None
+        end2 = None
+        indices_ls = None
+        answer = -1
+        if index.isdigit():
+            indices_ls = [int(index)]
+            # check mask format
+            demo_story = [[self.val_train_story[index][i] for index in indices_ls] for i in range(self.story_nsent)]
+            end1 = [self.val_train_end1[index] for index in indices_ls]
+            end2 = [self.val_train_end2[index] for index in indices_ls]
 
-        story_mask_unk_indices = [map(int, pair.split(',')) for pair in story_mask_indices.split(';')]
-        end1_mask_unk_indices = map(int, end1_mask_indices.split(';'))
-        end2_mask_unk_indices = map(int, end2_mask_indices.split(';'))
+            answer = np.asarray([self.val_train_answer[index] for index in indices_ls])
 
-        # check mask format
+        else:
+            demo_story = self.demo_index_story
+            end1 = self.demo_index_end1
+            end2 = self.demo_index_end2
+            answer = -1
+            
+        try:
+            story_mask_unk_indices = [map(int, pair.split(',')) for pair in story_mask_indices.split(';')]
+        except:
+            story_mask_unk_indices = []
+        try:
+            end1_mask_unk_indices = map(int, end1_mask_indices.split(';'))
+        except:
+            end1_mask_unk_indices = []
+        try:
+            end2_mask_unk_indices = map(int, end2_mask_indices.split(';'))
+        except:
+            end2_mask_unk_indices = []
 
-
-        demo_story = [[self.val_train_story[index][i] for index in indices_ls] for i in range(self.story_nsent)]
-        end1 = [self.val_train_end1[index] for index in indices_ls]
-        end2 = [self.val_train_end2[index] for index in indices_ls]
 
         if story_mask_unk_indices != []:
             for pair in story_mask_unk_indices:
                 if len(pair) == 1:
-                    for j in range(len(demo_story[pair[0]])):
-                        demo_story[pair[0]][j] = 1
+                    for j in range(len(demo_story[pair[0]][0])):
+                        demo_story[pair[0]][0][j] = 1
                 else:
-                    demo_story[pair[0]][pair[1]] = 1
+                    demo_story[pair[0]][0][pair[1]] = 1
         if end1_mask_unk_indices != []:
             for index in end1_mask_unk_indices:
-                end1[index] = 1
+                end1[0][index] = 1
         if end2_mask_unk_indices != []:
             for index in end2_mask_unk_indices:
-                end2[index] = 1
+                end2[0][index] = 1
 
-        answer = np.asarray([self.val_train_answer[index] for index in indices_ls])
 
         demo_story_matrices = [utils.padding(batch_sent) for batch_sent in demo_story]
         demo_end1_matrix = utils.padding(end1)
@@ -702,27 +733,117 @@ class Hierachi_RNN(object):
                                          demo_story_mask[3],
                                          demo_end1_mask,
                                          demo_end2_mask)
-        return score1, score2
-
-        self.print_func(indices_ls, score1, score2)
+        self.single_print_func(demo_story, end1, end2, score1, score2, answer)
 
     def print_func(self, indices_ls, score1 = [0], score2 = [0]):
 
         for i in range(len(indices_ls)):
             index = indices_ls[i]
-            story_string = "\n".join([" ".join([self.index2word_dict[self.val_train_story[index][j][k]] for k in range(len(self.val_train_story[index][j]))]) for j in range(5)])
+            story_string = "\n".join([" ".join([self.index2word_dict[self.val_train_story[index][j][k]] for k in range(len(self.val_train_story[index][j]))]) for j in range(4)])
             story_end1 = " ".join([self.index2word_dict[self.val_train_end1[index][k]] for k in range(len(self.val_train_end1[index]))])
             story_end2 = " ".join([self.index2word_dict[self.val_train_end2[index][k]] for k in range(len(self.val_train_end2[index]))])
 
-            classificaton = True
-            if score1[i] < score2[i]:
-                classificaton = False
+            answer = self.val_train_answer[i]
+            
+                
             print story_string 
             print " #END1# " + story_end1, score1[i]
             print " #END2# " + story_end2, score2[i]
-            print " #ANSWER# ", int(classificaton) + 1
+            print " #ANSWER# ", answer + 1
             print ""
             
+    def single_print_func(self, story_tensor, end1_matrix, end2_matrix, score1 = 0, score2 = 0, answer = -1):
+        print story_tensor 
+        story_string = "\n".join([" ".join([self.index2word_dict[story_tensor[j][0][k]] for k in range(len(story_tensor[j][0]))]) for j in range(4)])
+        story_end1 = " ".join([self.index2word_dict[end1_matrix[0][k]] for k in range(len(end1_matrix[0]))])
+        story_end2 = " ".join([self.index2word_dict[end2_matrix[0][k]] for k in range(len(end2_matrix[0]))])
+
+        print story_string 
+        print " #END1# " + story_end1, score1
+        print " #END2# " + story_end2, score2
+        print " #ANSWER# ", answer + 1
+        print ""
+
+    def sent2index(self, sent):
+        sent_index_ls = [self.word2index_dict['<s>']]
+        for word in sent:
+            if word.lower() in self.word2index_dict:
+                sent_index_ls.append(self.word2index_dict[word.lower()])
+            elif word.lower().isdigit():
+                sent_index_ls.append(self.word2index_dict['UNKNOWN_NUM'])
+            else: 
+                sent_index_ls.append(self.word2index_dict['UUNKNOWNN'])
+        sent_index_ls.append(self.word2index_dict['</s>'])
+        return sent_index_ls
+
+
+
+    def user_input(self, story, end1, end2):
+        tokenized_story = self.tokenization([story])
+        tokenized_end1 = self.tokenization([[end1]])
+        tokenized_end2 = self.tokenization([[end2]])
+        
+        tok_story = tokenized_story[0]
+        tok_end1 = tokenized_end1[0]
+        tok_end2 = tokenized_end2[0]
+        self.demo_index_story = []
+        for sent in tok_story:
+            self.demo_index_story.append([self.sent2index(sent)])
+        self.demo_index_end1 = [self.sent2index(tok_end1[0])]
+        self.demo_index_end2 = [self.sent2index(tok_end2[0])]
+           
+    #recursive function to split surfix punctuation and possession problem
+    def split_word(self, word):
+        bad_end = ("#",'"','?','!','+','.',',',"'", '(',')',':','/',';','$','-','`','*','\\','%','&',']')
+        bad_end_double = ('oz','lb','am','pm','th','ft')
+        bad_end_triple = ('lbs','mph')
+        bad_middle = ("-",",",".",":",'/',"*","\\",'&',"'",')','(','!')
+        non_char = '\xef\xbf\xbd'
+        single_abriev = ("'s","'d","'m")
+        double_abriev = ("'ve", "'ll", "'re","n't")
+        
+        if word.lower() in self.word2index_dict:
+            return [word]
+        elif word.startswith(bad_end):
+            return [word[0]] + split_word(word[1:])
+        elif word.endswith(bad_end):
+            return self.split_word(word[:-1]) + [word[-1]]
+        elif word.endswith(single_abriev+bad_end_double):
+            return self.split_word(word[:-2]) + [word[-2:]]
+        elif word.endswith(double_abriev+bad_end_triple):
+            return self.split_word(word[:-3]) + [word[-3:]]
+        elif any((c in bad_middle) for c in word.lower()[1:-1]):
+            for ch in bad_middle:
+                if ch in word.lower()[1:-1]:
+                    char_index = word.index(ch)
+                    return self.split_word(word[:char_index+1]) + self.split_word(word[char_index+1:])
+        elif non_char in word.lower():
+            char_index = word.index(non_char)
+            return self.split_word(word.lower()[:char_index])+["?"]+self.split_word(word.lower()[char_index])
+        elif utils.number_with_units(word.lower()) != -1:
+            index = utils.number_with_units(word.lower())
+            return [word[:index]] + [word[index:]]
+        else:
+            return [word]
+        
+    #convert word list into tokens
+    def split_sent(self, word_list):
+        new_word_ls = []
+        for word in word_list:
+            new_word_ls += self.split_word(word)
+        return new_word_ls
+
+    def tokenization(self, story_list):
+        tokenized_set = []
+        for story in story_list:
+            story_list = []
+            for sent in story:
+                word_list = sent.split(' ')
+                new_word_list = self.split_sent(word_list)
+                story_list.append(new_word_list)
+            tokenized_set.append(story_list)
+        return tokenized_set
+
 
 
    
@@ -737,9 +858,8 @@ if __name__ == '__main__':
     model.model_constructor()
     print "construction complete!"
 
-    model_save_path = raw_input("please enter the model saving path")
     print "parameters reloading..."
-    model.reload_model(model_save_path)
+    model.reload_model()
 
     while True:
         print "===============instruction==============="
@@ -778,7 +898,29 @@ if __name__ == '__main__':
             print "(e.g. 1;2;5;7)"
             end2_mask_ls = raw_input("here we go: ")            
             model.mask_demo(index, story_mask_ls, end1_mask_ls, end2_mask_ls)
-
+        elif command == 'user':
+            story = []
+            print "enter the 4 story plot sentences with enter to switch to next sentence:"
+            for i in range(4):
+                story.append(raw_input('sent'+str(i)+': '))
+            end1 = raw_input('end1: ')
+            end2 = raw_input('end2: ')
+            model.user_input(story, end1, end2)
+            model.single_print_func(model.demo_index_story, model.demo_index_end1, model.demo_index_end2)
+            mask_flag = raw_input("Do you want to mask input(y/n)")
+            if mask_flag == 'y':
+                print "enter the mask sequence "
+                print "(e.g. 0,1;0,2;1,5;2,3;4,5)"
+                story_mask_ls = raw_input("here we go: ")
+                print "enter the first ending mask sequence:"
+                print "(e.g. 1;2;5;7)"
+                end1_mask_ls = raw_input("here we go: ")
+                print "enter the second ending mask sequence:"
+                print "(e.g. 1;2;5;7)"
+                end2_mask_ls = raw_input("here we go: ")            
+                model.mask_demo('user', story_mask_ls, end1_mask_ls, end2_mask_ls)               
+            else:
+                model.mask_demo('user',[],[],[])
         else:
             print "command not found, please try again. "
             continue

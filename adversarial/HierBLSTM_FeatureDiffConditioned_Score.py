@@ -119,7 +119,7 @@ class Hierachi_RNN(object):
         # elif gouda_test == "gouda":
         #     self.mean_std_save_path = '/share/data/speech/Data/joncai/adv_monitor/'+gouda_test+'.pkl'
         # else:
-            self.mean_std_save_path = None
+        #    self.mean_std_save_path = None
 
         self.discrim_regularization_dict = {0:"no regularization on discriminator",
                                             1:"L2 on discriminator DNN",
@@ -458,7 +458,7 @@ class Hierachi_RNN(object):
             self.generat_cost = T.nlinalg.trace(T.dot(real_cov_inverse, self.fake_covariance) + T.dot(fake_cov_inverse, self.real_covariance)) + \
                                 T.dot(T.dot((self.fake_mean - self.real_mean).T, (fake_cov_inverse + real_cov_inverse)), (self.fake_mean - self.real_mean))
         else:
-            self.generat_cost = T.sqrt(T.sum(T.sqr(self.fake_mean - self.real_mean))) - self.score2
+            self.generat_cost = T.sqrt(T.sum(T.sqr(self.fake_mean - self.real_mean))) - T.sum(self.score2)
 
         self.all_discrim_params = self.encoder.all_params + self.reasoner.all_params 
         if self.score_func == "DNN":
@@ -805,8 +805,8 @@ class Hierachi_RNN(object):
              #       print ""
              #       print "Highest Score Ending in this batch: " + highest_score_end 
              #       print ""
-                    pickle.dump([fake_endings_mean, fake_endings_std, real_endings_mean, real_endings_std],
-                                open(self.mean_std_save_path, 'w'))
+             #       pickle.dump([fake_endings_mean, fake_endings_std, real_endings_mean, real_endings_std],
+             #                   open(self.mean_std_save_path, 'w'))
 
 
 

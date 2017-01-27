@@ -326,7 +326,10 @@ class Hierachi_RNN(object):
 
         self.minibatch_max_score()
 
-        self.batch_max_score = T.clip(self.score_descend - self.score1 + self.delta, 0.0, float('inf'))
+        pure_sum = self.score_descend - self.score1.reshape((-1,1))
+
+
+        self.batch_max_score = T.clip(pure_sum + self.delta, 0.0, float('inf'))
 
         self.batch_max_score_vec = T.sum(T.gt(self.batch_max_score, 0.0) * self.batch_max_score, axis = 1)
 
