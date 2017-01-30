@@ -7,6 +7,7 @@ import numpy as np
 import theano
 from time import sleep
 import sys
+import cPickle as pickle
 
 def progress_bar(percent, speed):
     i = int(percent)/2
@@ -16,6 +17,17 @@ def progress_bar(percent, speed):
     sys.stdout.flush()
     
 
+
+def combine_sents_string(sent_set):
+    '''
+    parameter: sent_set ==> 2D sentences set
+                        ==> type: list[list[str]]
+
+    return: sents1D ==> 1D sentences set
+                    ==> type: list[str]
+    '''
+    return [" ".join(doc) for doc in sent_set]
+        
 
 
 def combine_sents(sent_set):
@@ -201,3 +213,35 @@ def fake_data(max_index, batch_number, max_time_step, min_time_step):
         mask[batch] = np.concatenate((np.ones(length), np.zeros(max_time_step - length)))
 
     return (fake_data.astype('int32'), mask)
+
+class Ngram_generator(object):
+    """docstring for Ngram_generator"""
+    def __init__(self, N_GRAM):
+        super(Ngram_generator, self).__init__()
+        self.N_GRAM = N_GRAM
+        self.n_gram_dict = None
+        self.entries_num = None
+
+        with open('../../data/pickles/'+self.N_GRAM+'_dict.pkl','r') as f:
+            self.n_gram_dict = pickle.load(f)
+            self.entries_num = len(self.n_gram_dict)
+
+
+
+    def trigram_generator(self, sentence_batch):
+        """sentence_batch: 1D list"""
+        batch_matrix = []
+        for sent in sentence_batch:
+            sent = "#"+sent+"#"
+            sent_vec = np.zeros(self.entries_num)
+            for i in range(len(sent)-2):
+                try: 
+                    sent_vec[self.n_gram_dict[(sent[i:i+3]).lower()]] += 1.0 
+                except:
+                    continue
+            batch_matrix.append(sent_vec)
+        return batch_matrix
+
+
+
+        
