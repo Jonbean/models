@@ -1,0 +1,19 @@
+#!/bin/bash
+
+#$ -S /bin/bash
+#$ -M jontsai@uchicago.edu
+#$ -N lm
+#$ -m beasn
+#$ -r n
+#$ -o lm.out
+#$ -e lm.err
+#$ -cwd 
+
+SETTING1="50" 
+
+export OMP_NUM_THREADS=2
+export OPENBLAS_NUM_THREADS=2
+echo "Start - `date`"
+/home-nfs/jontsai/anaconda/bin/python tflm.py $SETTING1 
+echo "Finish - `date`"
+
