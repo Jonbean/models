@@ -4,7 +4,7 @@ import lasagne
 import numpy as np
 
 class LstmEncoder(object):
-    def __init__(self, LSTMLAYER_UNITS, wemb_trainable = True):
+    def __init__(self, batch_size, max_len, LSTMLAYER_UNITS, wemb_trainable = True):
         self.layer_units = LSTMLAYER_UNITS
         self.wemb = None
         self.GRAD_CLIP = 10.
@@ -14,6 +14,8 @@ class LstmEncoder(object):
         self.dropout_rate = 0.0
         self.bias = 0.001
         self.wemb_trainable = wemb_trainable
+        self.batch_size = batch_size
+        self.max_len = max_len
 
     def build_model(self, WordEmbedding_Init = None):
 
@@ -65,16 +67,17 @@ class LstmEncoder(object):
                                                     grad_clipping=self.GRAD_CLIP)
 
 
-        l_lstm2 = lasagne.layers.recurrent.LSTMLayer(l_lstm, 
-                                                    num_units=self.layer_units[1],
-                                                    mask_input=self.l_mask,
-                                                    ingate=gate_parameters,
-                                                    forgetgate=gate_parameters, 
-                                                    cell=gate_parameters,
-                                                    outgate=gate_parameters,
-                                                    learn_init=True,
-                                                    grad_clipping=self.GRAD_CLIP)
+        # Now, squash the n_batch and n_time_steps dimensions
+        l_reshape = lasagne.layers.ReshapeLayer(l_lstm, (-1, self.layer_units[0]))
+        # Now, we can apply feed-forward layers as usual.
+        # We want the network to predict a single value, the sum, so we'll use a single unit.
+        l_dense = lasagne.layers.DenseLayer(l_reshape, num_units=self.layer_units[1],
+                                            nonlinearity=lasagne.nonlinearities.rectify)
+        # Now, the shape will be n_batch*n_timesteps, 1. We can then reshape to
+        # n_batch, n_timesteps to get a single value for each timstep from each sequence
+        l_out = lasagne.layers.ReshapeLayer(l_dense, (self.batch_size, self.max_len, self.layer_units[1]))
 
-        self.output = l_lstm2
+        self.output = l_out
+
         self.all_params = lasagne.layers.get_all_params(self.output)
 

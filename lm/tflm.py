@@ -88,37 +88,30 @@ class Hierachi_RNN(object):
     def encoding_layer(self):
         
         sent_seq = lasagne.layers.get_output(self.encoder.output,
-                                                    {self.encoder.l_in:self.reshaped_inputs_variables, 
-                                                     self.encoder.l_mask:self.inputs_masks},
-                                                     deterministic = True)
+                                            {self.encoder.l_in:self.reshaped_inputs_variables, 
+                                             self.encoder.l_mask:self.inputs_masks},
+                                             deterministic = True)
 
         self.train_encodinglayer_vecs = (sent_seq * self.inputs_masks.dimshuffle(0,1,'x')).sum(axis = 1) / self.inputs_masks.sum(axis = 1, keepdims = True)       
-        self.prediction_softmax = lasagne.nonlinearities.softmax(self.train_encodinglayer_vecs)
+        self.word_predict_matrix = self.train_encodinglayer_vecs.reshape((-1, self.rnn_units[1]))
+        self.prediction_softmax = lasagne.nonlinearities.softmax(self.word_predict_matrix)
 
 
     def model_constructor(self, wemb_size = None):
-        self.inputs_variables = []
-        self.inputs_masks = []
-        self.reshaped_inputs_variables = []
-
-        '''here index 0 input is the story plot,
-           index1 input is the ending1 input, 
-           index2 input is the val/test set possible 2nd ending
-        '''
         self.inputs_variables = T.matrix('story_input', dtype='int64')
         self.inputs_masks = T.matrix('story_mask', dtype=theano.config.floatX)
-        self.reshaped_inputs_variables = self.inputs_variables.dimshuffle(0,1,'x')
+
+        self.reshaped_inputs_variables = self.inputs_variables[:,:-1].dimshuffle(0,1,'x')
+        batch_size, max_len = self.inputs_masks.shape
 
         #initialize neural network units
-        self.encoder = LSTM_sequence.LstmEncoder(LSTMLAYER_UNITS = self.rnn_units, wemb_trainable = bool(self.wemb_trainable))
+        self.encoder = LSTM_sequence.LstmEncoder(batch_size, max_len, LSTMLAYER_UNITS = self.rnn_units, wemb_trainable = bool(self.wemb_trainable))
         self.encoder.build_model(self.wemb)
 
         #build encoding layer
         self.encoding_layer()
 
-        prediction_reshape = self.prediction_softmax.reshape((-1, self.words_num))
-
-        cost = lasagne.objectives.categorical_crossentropy(prediction_reshape, T.flatten(self.inputs_variables[:,1:]))
+        cost = lasagne.objectives.categorical_crossentropy(self.prediction_softmax, T.flatten(self.inputs_variables[:,1:]))
 
         self.cost = lasagne.objectives.aggregate(cost, mode='mean') 
 
@@ -130,10 +123,10 @@ class Hierachi_RNN(object):
         # all_updates = lasagne.updates.momentum(self.cost, all_params, learning_rate = 0.05, momentum=0.9)
 
         self.train_func = theano.function([self.inputs_variables, self.inputs_masks], 
-                                        [self.cost], updates = all_updates)
+                                          [self.cost], updates = all_updates)
 
         self.prediction = theano.function([self.inputs_variables, self.inputs_masks],
-                                         [self.cost])
+                                          [self.cost])
         # pydotprint(self.train_func, './computational_graph.png')
 
     def load_data(self):
@@ -164,7 +157,7 @@ class Hierachi_RNN(object):
 
         ''''=====Wemb====='''
         if self.random_init_wemb:
-            wemb = np.random.rand(self.words_num ,self.wemb_size)
+            wemb = np.random.rand(self.words_num - 1,self.wemb_size)
             wemb = np.concatenate((np.zeros((1, self.wemb_size)), wemb), axis = 0)
             self.wemb = theano.shared(wemb).astype(theano.config.floatX)
         else:
@@ -220,10 +213,11 @@ class Hierachi_RNN(object):
             story1_mask = utils.mask_generator(story1)
             story2_mask = utils.mask_generator(story2)
 
+
             perplexity1 = self.prediction(story1_matrix,
-                                          story1_mask)
+                                          story1_mask[:,1:])
             perplexity2 = self.prediction(story2_matrix,
-                                          story2_mask)
+                                          story2_mask[:,1:])
 
             # Answer denotes the index of the anwer
             prediction = np.argmin(np.concatenate((score1, score2), axis=1), axis=1)
@@ -245,9 +239,9 @@ class Hierachi_RNN(object):
         story2_mask = utils.mask_generator(story2)
 
         perplexity1 = self.prediction(story1_matrix,
-                                      story1_mask)
+                                      story1_mask[:,1:])
         perplexity2 = self.prediction(story2_matrix,
-                                      story2_mask)
+                                      story2_mask[:,1:])
 
 
 
@@ -332,7 +326,7 @@ class Hierachi_RNN(object):
 
 
                 cost = self.train_func(story_matrix,
-                                       story_mask)
+                                       story_mask[:,1:])
 
 
                 total_cost += cost
