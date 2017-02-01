@@ -2,14 +2,14 @@ story_rep_type = ['concatenate', 'gothrough']
 DNN_settings = ['300x150x75x32x1', '150x75x32x1']
 for m in range(2):
     for l in range(5):
-        f = open('../adversarial/AttHier'+str(l)'.job','w')
+        f = open('../adversarial/AttHier'+str(l)+str(m)+'.job','w')
         f.write('#!/bin/bash\n')
         f.write('#$ -S /bin/bash\n')
         f.write('#$ -M jontsai@uchicago.edu\n')
-        f.write('#$ -N AttHier'+str(l)+'\n')
+        f.write('#$ -N AttHier'+str(l)+str(m)+'\n')
         f.write('#$ -m beasn\n')
-        f.write('#$ -o AttHier'+str(l)+'.out\n')
-        f.write('#$ -e AttHier'+str(l)+'.err\n')
+        f.write('#$ -o AttHier'+str(l)+str(m)+'.out\n')
+        f.write('#$ -e AttHier'+str(l)+str(m)+'.err\n')
         f.write('#$ -r n\n')
         f.write('#$ -cwd\n')
         f.write('SETTING1="300"\n')
