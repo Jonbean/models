@@ -19,6 +19,7 @@ class Hierachi_RNN(object):
                  word_rnn_setting, 
                  sent_rnn_setting,
                  batchsize, 
+                 cross_val_index,
                  wemb_trainable = 1,
                  learning_rate = 0.001,
                  delta = 1.0,
@@ -57,11 +58,11 @@ class Hierachi_RNN(object):
 
         # Initialize data loading attributes
         self.wemb = None
-        self.train_set_path = '../../data/pickles/val_train_set_index_corpus.pkl'
-        self.val_set_path = '../../data/pickles/val_test_set_index_corpus.pkl'
+        self.val_set_path = '../../data/pickles/val_index_corpus.pkl'
         self.test_set_path = '../../data/pickles/test_index_corpus.pkl' 
         self.wemb_matrix_path = '../../data/pickles/index_wemb_matrix.pkl'
-        self.best_val_model_save_path = './attention_best_model_'+mode+story_rep_type+score_func+loss_type+dnn_discriminator_setting+str(discrim_regularization_level)+str(dropout_rate)+'.pkl' 
+        self.saving_path_suffix = mode+'-'+story_rep_type+'-'+score_func+loss_type+'-'+dnn_discriminator_setting+'-'+str(discrim_regularization_level)+'-'+str(dropout_rate)+'-'+cross_val_index
+        self.best_val_model_save_path = '/share/data/speech/Data/joncai/dev_best_model/hierNonAtt_best_model_'+self.saving_path_suffix+'.pkl' 
         
         self.word_rnn_units = map(int, word_rnn_setting.split('x')) 
         self.sent_rnn_units = map(int, sent_rnn_setting.split('x'))
@@ -95,6 +96,8 @@ class Hierachi_RNN(object):
         self.GRAD_CLIP = 10.0
         if nonlin_func == 'default':
             self.nonlin_func = lasagne.nonlinearities.tanh
+        elif nonlin_func == 'relu':
+            self.nonlinearities = lasagne.nonlinearities.retify
         else:
             self.nonlin_func = None
 
@@ -113,6 +116,8 @@ class Hierachi_RNN(object):
                                             4:"L2 on discriminator all RNN",
                                             5:"L2 on discriminator all level"}
         self.regularization_index = float(regularization_index)
+        self.record_flag = False
+
         if self.loss_type == 'log':
             assert self.dnn_discriminator_setting[-1] == 2
             assert self.score_func != 'cos'
@@ -315,25 +320,35 @@ class Hierachi_RNN(object):
         # train_set = pickle.load(open(self.train_set_path))
         # self.train_story = train_set[0]
         # self.train_ending = train_set[1]
+        with open(self.val_set_path, 'r') as f:
+            real_val_set = pickle.load(f)
+        val_story = real_val_set[0]
+        val_ending1 = real_val_set[1]
+        val_ending2 = real_val_set[2]
+        val_answer = real_val_set[3]
 
-        train_set = pickle.load(open(self.train_set_path,'r'))
+        shuffle_list = np.random.permutation(len(val_answer))
+        val_train_ls = shuffle_list[:1500]
+        val_val_ls = shuffle_list[1500:]
 
-        self.val_train_story = train_set[0]
-        self.val_train_end1 = train_set[1]
-        self.val_train_end2 = train_set[2]
-        self.val_train_answer = train_set[3]
+        print len(val_train_ls)
+
+        print len(val_val_ls)
+        self.val_train_story = [val_story[i] for i in val_train_ls]
+        self.val_train_end1 = [val_ending1[i] for i in val_train_ls]
+        self.val_train_end2 = [val_ending2[i] for i in val_train_ls]
+        self.val_train_answer = [val_answer[i] for i in val_train_ls]
 
         self.train_n = len(self.val_train_answer)
         
-        val_set = pickle.load(open(self.val_set_path,'r'))
-        self.val_test_story = val_set[0]
-        self.val_test_end1 = val_set[1]
-        self.val_test_end2 = val_set[2]
-        self.val_test_answer = val_set[3]
+        self.val_test_story = [val_story[i] for i in val_val_ls]
+        self.val_test_end1 = [val_ending1[i] for i in val_val_ls]
+        self.val_test_end2 = [val_ending2[i] for i in val_val_ls]
+        self.val_test_answer = [val_answer[i] for i in val_val_ls]
 
         self.val_n = len(self.val_test_answer)
-
-        test_set = pickle.load(open(self.test_set_path))
+        with open(self.test_set_path,'r') as f:
+            test_set = pickle.load(f)
         self.test_story = test_set[0]
         self.test_ending1 = test_set[1]
         self.test_ending2 = test_set[2]
@@ -366,7 +381,8 @@ class Hierachi_RNN(object):
                    
         max_batch_n = n_eva / minibatch_n
         residue = n_eva % minibatch_n
-
+        if self.record_flag:
+            self.test_score_record_matrix = np.zeros((self.n_test, 2))
         for i in range(max_batch_n):
 
             story_ls = [[eva_story[index][j] for index in range(i*minibatch_n, (i+1)*minibatch_n)] for j in range(self.story_nsent)]
@@ -394,6 +410,9 @@ class Hierachi_RNN(object):
                                              story_mask[3],
                                              ending1_mask,
                                              ending2_mask)
+            score_matrix = np.concatenate((score1, score2), axis = 1)
+            if self.record_flag:
+                self.test_score_record_matrix[i*minibatch_n: (i+1)*minibatch_n,:] = score_matrix
 
             # Answer denotes the index of the anwer
             if self.loss_type == "hinge":
@@ -434,18 +453,39 @@ class Hierachi_RNN(object):
                                          ending1_mask,
                                          ending2_mask)
 
+        score_matrix = np.concatenate((score1, score2), axis = 1)
+        if self.record_flag:
+            self.test_score_record_matrix[-residue:,:] = score_matrix
+
         if self.loss_type == "hinge":
-            prediction = np.argmax(np.concatenate((score1, score2), axis=1), axis=1)
+            prediction = np.argmax(score_matrix, axis=1)
             correct_vec = prediction - eva_answer[-residue:]
             correct += minibatch_n - (abs(correct_vec)).sum()
-            return correct/n_eva
+            acc = correct/n_eva
+            if val_or_test == 'val' and self.best_val_accuracy <= acc:
+                self.record_flag = True
+            elif val_or_test == 'test' and self.record_flag:
+                self.record_flag = False
+                with open('./test_score_record_matrix'+self.saving_path_suffix+',pkl') as f:
+                    pickle.dump(self.test_score_record_matrix, f)
+            return acc
+
         else:
             answer1 = np.argmax(score1, axis = 1)
             answer2 = np.argmax(score2, axis = 1)
             correct_vec1 = (1 - answer1) - eva_answer[-residue:]
             correct_vec2 = answer2 - eva_answer[-residue:]
             correct += minibatch_n*2 - (abs(correct_vec1)).sum() - (abs(correct_vec2)).sum()
-            return correct/(2*n_eva)
+
+            acc = correct/(2*n_eva)
+            if val_or_test == 'val' and self.best_val_accuracy <= acc:
+                self.record_flag = True
+            elif val_or_test == 'test' and self.record_flag:
+                self.record_flag = False
+                with open('./test_score_record_matrix'+self.saving_path_suffix+'.pkl','w') as f:
+                    pickle.dump(self.test_score_record_matrix, f)
+            return acc
+
     def saving_model(self, accuracy):
         encoder_params_value = lasagne.layers.get_all_param_values(self.encoder.output)
         reasoner_params_value = lasagne.layers.get_all_param_values(self.reasoner.output)
@@ -467,21 +507,21 @@ class Hierachi_RNN(object):
         N_EPOCHS = self.epochs
         N_BATCH = self.batchsize
         N_TRAIN_INS = self.train_n
-        best_val_accuracy = 0
-        best_test_accuracy = 0
+        self.best_val_accuracy = 0
+        self.best_test_accuracy = 0
         test_threshold = 10000/N_BATCH
 
         '''init test'''
         print "initial test..."
         val_result = self.eva_func('val')
         print "val set accuracy: ", val_result*100, "%"
-        if val_result > best_val_accuracy:
-            best_val_accuracy = val_result
+        if val_result > self.best_val_accuracy:
+            self.best_val_accuracy = val_result
 
         test_accuracy = self.eva_func('test')
         print "test set accuracy: ", test_accuracy * 100, "%"
-        if test_accuracy > best_test_accuracy:
-            best_test_accuracy = test_accuracy
+        if test_accuracy > self.best_test_accuracy:
+            self.best_test_accuracy = test_accuracy
         '''end of init test'''
         
         for epoch in range(N_EPOCHS):
@@ -516,11 +556,11 @@ class Hierachi_RNN(object):
                 train_story_mask = [utils.mask_generator(batch_sent) for batch_sent in train_story]
                 train_end1_mask = utils.mask_generator(end1)
                 train_end2_mask = utils.mask_generator(end2)
-               # print len(train_story)
-               # print train_end1_matrix.shape
-               # print train_end2_matrix.shape
-               # print train_end1_mask.shape
-               # print train_end2_mask.shape
+                # print len(train_story)
+                # print train_end1_matrix.shape
+                # print train_end2_matrix.shape
+                # print train_end1_mask.shape
+                # print train_end2_mask.shape
 
                 results = self.train_func(train_story_matrices[0],
                                           train_story_matrices[1],
@@ -563,16 +603,16 @@ class Hierachi_RNN(object):
             print "overall accuracy: ", train_acc , "%"
             val_result = self.eva_func('val')
             print "val set accuracy: ", val_result*100, "%"
-            if val_result > best_val_accuracy:
-                best_val_accuracy = val_result
+            if val_result > self.best_val_accuracy:
+                self.best_val_accuracy = val_result
                 print "saving model..."
-                self.saving_model(best_val_accuracy)
+                self.saving_model(self.best_val_accuracy)
                 print "saving complete"
  
             test_accuracy = self.eva_func('test')
             print "test set accuracy: ", test_accuracy * 100, "%"
-            if test_accuracy > best_test_accuracy:
-                best_test_accuracy = test_accuracy
+            if test_accuracy > self.best_test_accuracy:
+                self.best_test_accuracy = test_accuracy
             '''end of init test'''
             print "======================================="
 
