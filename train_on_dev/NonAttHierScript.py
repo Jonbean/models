@@ -2,7 +2,7 @@ story_rep_type = ['concatenate', 'gothrough']
 DNN_settings = ['300x150x75x32x1', '150x75x32x1']
 for m in range(2):
     for l in range(5):
-        f = open('../adversarial/NonAttHier'+str(l)+str(m)+'.job','w')
+        f = open('./NonAttHier'+str(l)+str(m)+'.job','w')
         f.write('#!/bin/bash\n')
         f.write('#$ -S /bin/bash\n')
         f.write('#$ -M jontsai@uchicago.edu\n')
