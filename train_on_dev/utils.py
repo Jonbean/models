@@ -7,6 +7,7 @@ import numpy as np
 import theano
 from time import sleep
 import sys
+import cPickle as pickle
 
 def progress_bar(percent, speed):
     i = int(percent)/2
@@ -16,6 +17,17 @@ def progress_bar(percent, speed):
     sys.stdout.flush()
     
 
+
+def combine_sents_string(sent_set):
+    '''
+    parameter: sent_set ==> 2D sentences set
+                        ==> type: list[list[str]]
+
+    return: sents1D ==> 1D sentences set
+                    ==> type: list[str]
+    '''
+    return [" ".join(doc) for doc in sent_set]
+        
 
 
 def combine_sents(sent_set):
@@ -202,74 +214,34 @@ def fake_data(max_index, batch_number, max_time_step, min_time_step):
 
     return (fake_data.astype('int32'), mask)
 
-def number_with_units(word):
-    index = 0
-    if len(word) <= 1:
-        return -1
-    for c in word:
-        if c.isdigit() or c == ',':
-            continue
-        else:
-            index = word.index(c)
-            break
-    for c in word[index:]:
-        if c.isalpha():
-            continue
-        else:
-            return -1
-    return index
+class Ngram_generator(object):
+    """docstring for Ngram_generator"""
+    def __init__(self, N_GRAM):
+        super(Ngram_generator, self).__init__()
+        self.N_GRAM = N_GRAM
+        self.n_gram_dict = None
+        self.entries_num = None
 
-#recursive function to split surfix punctuation and possession problem
-def split_word(word):
-    bad_end = ("#",'"','?','!','+','.',',',"'", '(',')',':','/',';','$','-','`','*','\\','%','&',']')
-    bad_end_double = ('oz','lb','am','pm','th','ft')
-    bad_end_triple = ('lbs','mph')
-    bad_middle = ("-",",",".",":",'/',"*","\\",'&',"'",')','(','!')
-    non_char = '\xef\xbf\xbd'
-    single_abriev = ("'s","'d","'m")
-    double_abriev = ("'ve", "'ll", "'re","n't")
-    
-    if word.lower() in glove_300_dict:
-        return [word]
-    elif word.startswith(bad_end):
-        return [word[0]] + split_word(word[1:])
-    elif word.endswith(bad_end):
-        return split_word(word[:-1]) + [word[-1]]
-    elif word.endswith(single_abriev+bad_end_double):
-        return split_word(word[:-2]) + [word[-2:]]
-    elif word.endswith(double_abriev+bad_end_triple):
-        return split_word(word[:-3]) + [word[-3:]]
-    elif any((c in bad_middle) for c in word.lower()[1:-1]):
-        for ch in bad_middle:
-            if ch in word.lower()[1:-1]:
-                char_index = word.index(ch)
-                return split_word(word[:char_index+1]) + split_word(word[char_index+1:])
-    elif non_char in word.lower():
-        char_index = word.index(non_char)
-        return split_word(word.lower()[:char_index])+["?"]+split_word(word.lower()[char_index])
-    elif number_with_units(word.lower()) != -1:
-        index = number_with_units(word.lower())
-        return [word[:index]] + [word[index:]]
-    else:
-        return [word]
-    
-#convert word list into tokens
-def split_sent(word_list):
-    new_word_ls = []
-    for word in word_list:
-        new_word_ls += split_word(word)
-    return new_word_ls
-
-def tokenization(story_list):
-    tokenized_set = []
-    for story in story_list:
-        story_list = []
-        for sent in story:
-            word_list = sent.split(' ')
-            new_word_list = split_sent(word_list)
-            story_list.append(new_word_list)
-        tokenized_set.append(story_list)
-    return tokenized_set
+        with open('../../data/pickles/'+self.N_GRAM+'_dict.pkl','r') as f:
+            self.n_gram_dict = pickle.load(f)
+            self.entries_num = len(self.n_gram_dict)
 
 
 
+    def trigram_generator(self, sentence_batch):
+        """sentence_batch: 1D list"""
+        batch_matrix = []
+        for sent in sentence_batch:
+            sent = "#"+sent+"#"
+            sent_vec = np.zeros(self.entries_num)
+            for i in range(len(sent)-2):
+                try: 
+                    sent_vec[self.n_gram_dict[(sent[i:i+3]).lower()]] += 1.0 
+                except:
+                    continue
+            batch_matrix.append(sent_vec)
+        return batch_matrix
+
+
+
+        

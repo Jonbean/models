@@ -58,7 +58,7 @@ class Hierachi_RNN(object):
         self.val_set_path = '../../data/pickles/val_index_corpus.pkl'
         self.test_set_path = '../../data/pickles/test_index_corpus.pkl' 
         self.wemb_matrix_path = '../../data/pickles/index_wemb_matrix.pkl'
-        self.saving_path_suffix = mode+'-'+story_rep_type+'-'+score_func+loss_type+'-'+dnn_discriminator_setting+'-'+str(discrim_regularization_level)+'-'+str(dropout_rate)+'-'+cross_val_index
+        self.saving_path_suffix = mode+'-'+'-'+loss_type+'-'+dnn_discriminator_setting+'-'+str(discrim_regularization_level)+'-'+str(dropout_rate)+'-'+cross_val_index
         # self.best_val_model_save_path = '/share/data/speech/Data/joncai/dev_best_model/hierNonAttH_best_model_'+self.saving_path_suffix+'.pkl' 
         
         self.word_rnn_units = map(int, word_rnn_setting.split('x')) 
@@ -205,7 +205,7 @@ class Hierachi_RNN(object):
         self.encoder.build_word_level(self.wemb)
 
 
-        self.DNN_score_func = DNN.DNN(INPUTS_SIZE = self.word_rnn_units[-1], 
+        self.DNN_score_func = DNN.DNN(INPUTS_SIZE = self.word_rnn_units[-1]*2, 
                                       LAYER_UNITS = self.dnn_discriminator_setting, 
                                       final_nonlin = self.nonlin_func,
                                       dropout_rate = self.dropout_rate) 
@@ -401,7 +401,7 @@ class Hierachi_RNN(object):
                 self.record_flag = True
             elif val_or_test == 'test' and self.record_flag:
                 self.record_flag = False
-                with open('./test_score_record_matrix_plaint_concate'+self.saving_path_suffix+',pkl') as f:
+                with open('./test_score_record_matrix_plaint_concate1'+self.saving_path_suffix+'.pkl','w') as f:
                     pickle.dump(self.test_score_record_matrix, f)
             return acc
 
@@ -485,12 +485,12 @@ class Hierachi_RNN(object):
                 answer = np.asarray([self.val_train_answer[index] for index in batch_index_list])
 
                 results = self.train_func(story_matrix, 
-                                                 end1_matrix,
-                                                 end2_matrix,
-                                                 story_mask,
-                                                 end1_mask,
-                                                 end2_mask, 
-                                                 asnwer)
+                                         end1_matrix,
+                                         end2_matrix,
+                                         story_mask,
+                                         end1_mask,
+                                         end2_mask,
+                                         answer)
 
 
                 cost = results[0]

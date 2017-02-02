@@ -62,7 +62,7 @@ class Hierachi_RNN(object):
         self.test_set_path = '../../data/pickles/test_index_corpus.pkl' 
         self.wemb_matrix_path = '../../data/pickles/index_wemb_matrix.pkl'
         self.saving_path_suffix = mode+'-'+story_rep_type+'-'+score_func+loss_type+'-'+dnn_discriminator_setting+'-'+str(discrim_regularization_level)+'-'+str(dropout_rate)+'-'+cross_val_index
-        self.best_val_model_save_path = '/share/data/speech/Data/joncai/dev_best_model/hierNonAtt_best_model_'+self.saving_path_suffix+'.pkl' 
+        self.best_val_model_save_path = '/share/data/speech/Data/joncai/dev_best_model/hierNonAttH_best_model_'+self.saving_path_suffix+'.pkl' 
         
         self.word_rnn_units = map(int, word_rnn_setting.split('x')) 
         self.sent_rnn_units = map(int, sent_rnn_setting.split('x'))
