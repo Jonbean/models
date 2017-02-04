@@ -63,7 +63,8 @@ class Hierachi_RNN(object):
         self.wemb_matrix_path = '../../data/pickles/index_wemb_matrix.pkl'
         self.saving_path_suffix = mode+'-'+story_rep_type+'-'+score_func+loss_type+'-'+dnn_discriminator_setting+'-'+str(discrim_regularization_level)+'-'+str(dropout_rate)+'-'+cross_val_index
         self.best_val_model_save_path = '/share/data/speech/Data/joncai/dev_best_model/hierNonAttH_best_model_'+self.saving_path_suffix+'.pkl' 
-        
+        self.five_fold_cross_val_ls_path = '../../data/pickles/fiveFold_crossV_ls_ls.pkl'
+        self.cross_val_index = int(cross_val_index)
         self.word_rnn_units = map(int, word_rnn_setting.split('x')) 
         self.sent_rnn_units = map(int, sent_rnn_setting.split('x'))
 
@@ -326,10 +327,12 @@ class Hierachi_RNN(object):
         val_ending1 = real_val_set[1]
         val_ending2 = real_val_set[2]
         val_answer = real_val_set[3]
+    
+        with open(self.five_fold_cross_val_ls_path, 'r') as f:
+            FFV_ls = pickle.load(f)
 
-        shuffle_list = np.random.permutation(len(val_answer))
-        val_train_ls = shuffle_list[:1500]
-        val_val_ls = shuffle_list[1500:]
+        val_train_ls = FFV_ls[0][self.cross_val_index] 
+        val_val_ls = FFV_ls[1][self.cross_val_index]
 
         print len(val_train_ls)
 
@@ -466,7 +469,7 @@ class Hierachi_RNN(object):
                 self.record_flag = True
             elif val_or_test == 'test' and self.record_flag:
                 self.record_flag = False
-                with open('./test_score_record_matrix'+self.saving_path_suffix+'.pkl','w') as f:
+                with open('./NonAttHier_record_matrix'+self.saving_path_suffix+'.pkl','w') as f:
                     pickle.dump(self.test_score_record_matrix, f)
             return acc
 
@@ -482,7 +485,7 @@ class Hierachi_RNN(object):
                 self.record_flag = True
             elif val_or_test == 'test' and self.record_flag:
                 self.record_flag = False
-                with open('./test_score_record_matrix'+self.saving_path_suffix+'.pkl','w') as f:
+                with open('./NonAttHier_record_matrix'+self.saving_path_suffix+'.pkl','w') as f:
                     pickle.dump(self.test_score_record_matrix, f)
             return acc
 

@@ -396,7 +396,7 @@ class Hierachi_RNN(object):
                 self.record_flag = True
             elif val_or_test == 'test' and self.record_flag:
                 self.record_flag = False
-                with open('./test_score_record_matrix_plaint_end'+self.saving_path_suffix+'.pkl','w') as f:
+                with open('./plaint_end'+self.saving_path_suffix+'.pkl','w') as f:
                     pickle.dump(self.test_score_record_matrix, f)
             return acc
 
@@ -412,7 +412,7 @@ class Hierachi_RNN(object):
                 self.record_flag = True
             elif val_or_test == 'test' and self.record_flag:
                 self.record_flag = False
-                with open('./test_score_record_matrix_plaint_end'+self.saving_path_suffix+'.pkl','w') as f:
+                with open('./plaint_end'+self.saving_path_suffix+'.pkl','w') as f:
                     pickle.dump(self.test_score_record_matrix, f)
             return acc
 
