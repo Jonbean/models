@@ -155,6 +155,9 @@ class Hierachi_RNN(object):
     def attention_layer(self):        
         self.attentioned_sent_rep1 = []
         self.attentioned_sent_rep2 = []
+        self.attention1_weights_record = []
+        self.attention2_weights_record = []
+
         for i in range(self.story_nsent):
             n_batch, n_seq, _= self.train_encodinglayer_vecs[i].shape
 
@@ -171,6 +174,9 @@ class Hierachi_RNN(object):
             attention1_weight_matrix = numerator1 / numerator1.sum(axis = 1, keepdims = True)
             attention2_weight_matrix = numerator2 / numerator2.sum(axis = 1, keepdims = True)
 
+            self.attention1_weights_record.append(attention1_weight_matrix)
+            self.attention2_weights_record.append(attention2_weight_matrix)
+
             attentioned_sent_seq1 = self.train_encodinglayer_vecs[i]*(attention1_weight_matrix.reshape([n_batch, n_seq, 1]))
             attentioned_sent_seq2 = self.train_encodinglayer_vecs[i]*(attention2_weight_matrix.reshape([n_batch, n_seq, 1]))
 
@@ -179,7 +185,6 @@ class Hierachi_RNN(object):
 
             self.attentioned_sent_rep1.append(attentioned_sent_rep1)
             self.attentioned_sent_rep2.append(attentioned_sent_rep2)
-
 
 
 
@@ -343,6 +348,7 @@ class Hierachi_RNN(object):
         # Compute adam updates for training
 
         self.prediction = theano.function(self.inputs_variables + self.inputs_masks, [self.score11, self.score22])
+        self.demo_print = theano.function(self.inputs_variables + self.inputs_masks, [self.score11, self.score22]+self.attention1_weights_record+self.attention2_weights_record)
 
         # pydotprint(self.train_func, './computational_graph.png')
 
@@ -647,19 +653,22 @@ class Hierachi_RNN(object):
         demo_end2_mask = utils.mask_generator(end2)
 
 
-        score1, score2 = self.prediction(demo_story_matrices[0],
-                                         demo_story_matrices[1],
-                                         demo_story_matrices[2],
-                                         demo_story_matrices[3], 
-                                         demo_end1_matrix,
-                                         demo_end2_matrix,
-                                         demo_story_mask[0],
-                                         demo_story_mask[1],
-                                         demo_story_mask[2],
-                                         demo_story_mask[3],
-                                         demo_end1_mask,
-                                         demo_end2_mask)
-
+        results = self.demo_print(demo_story_matrices[0],
+                                 demo_story_matrices[1],
+                                 demo_story_matrices[2],
+                                 demo_story_matrices[3], 
+                                 demo_end1_matrix,
+                                 demo_end2_matrix,
+                                 demo_story_mask[0],
+                                 demo_story_mask[1],
+                                 demo_story_mask[2],
+                                 demo_story_mask[3],
+                                 demo_end1_mask,
+                                 demo_end2_mask)
+        score1 = results[0]
+        score2 = result[1]
+        attention1 = results[2:2+5]
+        attention2 = results[-5:]
         self.print_func(indices_ls, score1, score2)
             
     def mask_demo(self, index, story_mask_indices, end1_mask_indices, end2_mask_indices):
@@ -721,19 +730,23 @@ class Hierachi_RNN(object):
         demo_end2_mask = utils.mask_generator(end2)
 
 
-        score1, score2 = self.prediction(demo_story_matrices[0],
-                                         demo_story_matrices[1],
-                                         demo_story_matrices[2],
-                                         demo_story_matrices[3], 
-                                         demo_end1_matrix,
-                                         demo_end2_matrix,
-                                         demo_story_mask[0],
-                                         demo_story_mask[1],
-                                         demo_story_mask[2],
-                                         demo_story_mask[3],
-                                         demo_end1_mask,
-                                         demo_end2_mask)
-        self.single_print_func(demo_story, end1, end2, score1, score2, answer)
+        results = self.demo_print(demo_story_matrices[0],
+                                 demo_story_matrices[1],
+                                 demo_story_matrices[2],
+                                 demo_story_matrices[3], 
+                                 demo_end1_matrix,
+                                 demo_end2_matrix,
+                                 demo_story_mask[0],
+                                 demo_story_mask[1],
+                                 demo_story_mask[2],
+                                 demo_story_mask[3],
+                                 demo_end1_mask,
+                                 demo_end2_mask)
+        score1 = results[0]
+        score2 = results[1]
+        attention1 = results[2:2+5]
+        attention2 = results[-5:]
+        self.single_print_func(demo_story, end1, end2, score1, score2, answer, attention1, attention2)
 
     def print_func(self, indices_ls, score1 = [0], score2 = [0]):
 
@@ -752,7 +765,12 @@ class Hierachi_RNN(object):
             print " #ANSWER# ", answer + 1
             print ""
             
-    def single_print_func(self, story_tensor, end1_matrix, end2_matrix, score1 = 0, score2 = 0, answer = -1):
+    def single_print_func(self, story_tensor, 
+                          end1_matrix, end2_matrix, 
+                          score1 = 0, score2 = 0, 
+                          answer = -1, attention1 = 0.0, 
+                          attention2 = 0.0):
+
         print story_tensor 
         story_string = "\n".join([" ".join([self.index2word_dict[story_tensor[j][0][k]] for k in range(len(story_tensor[j][0]))]) for j in range(4)])
         story_end1 = " ".join([self.index2word_dict[end1_matrix[0][k]] for k in range(len(end1_matrix[0]))])
@@ -760,7 +778,9 @@ class Hierachi_RNN(object):
 
         print story_string 
         print " #END1# " + story_end1, score1
+        print " attention weights1: ", attention1
         print " #END2# " + story_end2, score2
+        print " attention weights2: ", attention2
         print " #ANSWER# ", answer + 1
         print ""
 
@@ -865,6 +885,7 @@ if __name__ == '__main__':
         print "===============instruction==============="
         print "enter 'multi' to test multiple instances "
         print "enter 'single' to test single instance \n with unknown coverage "
+        print "enter 'user' to test an user story "
         print "enter 'quit' to exit this program "
         print "========================================="
         command = raw_input('I want: ')
