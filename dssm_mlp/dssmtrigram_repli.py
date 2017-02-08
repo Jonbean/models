@@ -14,6 +14,7 @@ class DSSM_MLP_Model(object):
                  mlp_units, 
                  dropout_rate = 0.0, 
                  batchsize = 1024, 
+                 negEnd_N = 50,
                  optimizer = 'SGD', 
                  wemb_size = None):
 
@@ -53,7 +54,8 @@ class DSSM_MLP_Model(object):
         self.test_ending2 = None
         self.test_answer = None
         self.n_test = None
-        self.trigram_generator = utils.Ngram_generator('tri_gram')
+        self.negEnd_N = 50
+        self.trigram_generator = utils.Ngram_generator('letter_trigram')
         self.trigram_input_size = self.trigram_generator.entries_num
 
     def batch_cosine(self, batch_vectors1, batch_vectors2):
@@ -67,20 +69,31 @@ class DSSM_MLP_Model(object):
 
     def encoding_layer(self):
         self.sent_reps = []
-        for i in range(6):
+        for i in range(3):
             sent_rep = lasagne.layers.get_output(self.l_out,
                                                 {self.l_in:self.story_input_variable[i]},
                                                 deterministic = True)
             self.sent_reps.append(sent_rep)
-
+        self.neg_sent_reps = []
+        for i in range(self.negEnd_N):
+            sent_rep = lasagne.layers.get_output(self.l_out,
+                                                {self.l_in:self.neg_end_matrices[i]},
+                                                deterministic = True)
+            self.neg_sent_reps.append(sent_rep)
 
     def model_constructor(self):
         self.story_input_variable = []
         self.story_mask = []
         self.story_reshape_input = []
 
-        for i in range(6):
+        for i in range(3):
             self.story_input_variable.append(T.matrix('story_'+str(i)+'_input', dtype='int64'))
+
+        self.neg_end_tensor = T.tensor3('neg_end_tensor', dtype = 'int64')
+
+        self.neg_end_matrices = []
+        for i in range(self.negEnd_N):
+            self.neg_end_matrices.append(self.neg_end_tensor[i:i+1,:,:])
 
 
         self.l_in = lasagne.layers.InputLayer(shape=(None, self.trigram_input_size))
@@ -95,9 +108,13 @@ class DSSM_MLP_Model(object):
         self.encoding_layer()
 
         self.batch_scores = []
-        for i in range(1,6):
-            self.batch_scores.append(self.batch_cosine(self.sent_reps[0], self.sent_reps[i]))
+        self.score1 = self.batch_cosine(self.sent_reps[0], self.sent_reps[1])
+        self.score2 = self.batch_cosine(self.sent_reps[0], self.sent_reps[2])
 
+        self.batch_scores.append(self.score1)
+
+        for i in range(self.negEnd_N):
+            self.batch_scores.append(self.batch_cosine(self.sent_reps[0], self.neg_sent_reps[i]))
 
 
         score_concate = T.concatenate(self.batch_scores, axis = 1)
@@ -111,16 +128,16 @@ class DSSM_MLP_Model(object):
         
         self.all_updates = None 
         if self.optimizer == 'SGD':
-            self.all_updates = lasagne.updates.sgd(self.cost, self.all_params, 0.01)
+            self.all_updates = lasagne.updates.sgd(self.cost, self.all_params, 0.5)
         else:
             self.all_updates = lasagne.updates.adam(self.cost, self.all_params)
 
-        self.train_func = theano.function(self.story_input_variable,
+        self.train_func = theano.function(self.story_input_variable[:2]+[self.neg_end_tensor],
                                          [self.cost, score_concate], updates = self.all_updates)
 
 
         self.prediction = theano.function(self.story_input_variable[:3],
-                                          self.batch_scores[:2])
+                                          [self.score1, self.score2])
 
     def load_data(self):
         '''======Train Set====='''
@@ -180,9 +197,9 @@ class DSSM_MLP_Model(object):
             end1 = [eva_ending1[index] for index in range(i*minibatch_n, (i+1)*minibatch_n)]
             end2 = [eva_ending2[index] for index in range(i*minibatch_n, (i+1)*minibatch_n)]
 
-            story_matrix = self.trigram_generator.trigram_generator(story)
-            end1_matrix = self.trigram_generator.trigram_generator(end1)
-            end2_matrix = self.trigram_generator.trigram_generator(end2)
+            story_matrix = self.trigram_generator.letter_trigram_generator(story)
+            end1_matrix = self.trigram_generator.letter_trigram_generator(end1)
+            end2_matrix = self.trigram_generator.letter_trigram_generator(end2)
 
             score1, score2 = self.prediction(story_matrix, end1_matrix, end2_matrix)
 
@@ -198,9 +215,9 @@ class DSSM_MLP_Model(object):
         end2 = [eva_ending2[index] for index in range(-residue, 0)]
 
 
-        story_matrix = self.trigram_generator.trigram_generator(story)
-        end1_matrix = self.trigram_generator.trigram_generator(end1)
-        end2_matrix = self.trigram_generator.trigram_generator(end2)
+        story_matrix = self.trigram_generator.letter_trigram_generator(story)
+        end1_matrix = self.trigram_generator.letter_trigram_generator(end1)
+        end2_matrix = self.trigram_generator.letter_trigram_generator(end2)
 
         score1, score2 = self.prediction(story_matrix, end1_matrix, end2_matrix)
 
@@ -254,9 +271,9 @@ class DSSM_MLP_Model(object):
                 #neg_end_index_matrix.shape = [N_BATCH, 4]
                 neg_end_index_matrix = []
                 for i in range(N_BATCH):
-                    neg_end_index_vec = np.random.randint(0, N_TRAIN_INS, size = (4,))
+                    neg_end_index_vec = np.random.randint(0, N_TRAIN_INS, size = (self.negEnd_N,))
                     while np.any(neg_end_index_vec - batch_index_list[i]) == 0:
-                        neg_end_index_vec = np.random.randint(0, N_TRAIN_INS, size = (4,))
+                        neg_end_index_vec = np.random.randint(0, N_TRAIN_INS, size = (self.negEnd_N,))
                     neg_end_index_matrix.append(neg_end_index_vec)
                 neg_end_index_list = np.asarray(neg_end_index_matrix)
 
@@ -264,17 +281,16 @@ class DSSM_MLP_Model(object):
                 end = [self.train_ending[index] for index in batch_index_list]
 
                 neg_end_matrix_ls = []
-                for i in range(4):
+                for i in range(self.negEnd_N):
                     neg_end = [self.train_ending[index] for index in neg_end_index_list[:, i]]
-                    neg_end_matrix_ls.append(self.trigram_generator.trigram_generator(neg_end))
+                    neg_end_matrix_ls.append(self.trigram_generator.letter_trigram_generator(neg_end))
 
-                story_matrix = self.trigram_generator.trigram_generator(story)
-                end_matrix = self.trigram_generator.trigram_generator(end)
+                story_matrix = self.trigram_generator.letter_trigram_generator(story)
+                end_matrix = self.trigram_generator.letter_trigram_generator(end)
 
 
 
-                cost, score_matrix = self.train_func(story_matrix, end_matrix, neg_end_matrix_ls[0],
-                                                     neg_end_matrix_ls[1], neg_end_matrix_ls[2], neg_end_matrix_ls[3])
+                cost, score_matrix = self.train_func(story_matrix, end_matrix, neg_end_matrix_ls)
 
 
 
