@@ -242,6 +242,22 @@ class Ngram_generator(object):
             batch_matrix.append(sent_vec)
         return batch_matrix
 
+    def letter_trigram_generator(self, sentence_batch):
+        """sentence_batch: 1D list"""
+        batch_matrix = []
+        for sent in sentence_batch:
+            words = sent.split(' ')
+            sent_vec = np.zeros(self.entries_num)
+            for word in words:
+                tag_word = '#'+word.lower()+'#'
+                for i in range(len(tag_word) - 2):
+                    try: 
+                        sent_vec[self.n_gram_dict[tag_word[i:i+3]]] += 1.0 
+                    except:
+                        continue
+            batch_matrix.append(sent_vec)
+        return batch_matrix
+
 
 
         
